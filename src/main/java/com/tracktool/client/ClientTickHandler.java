@@ -87,6 +87,8 @@ public class ClientTickHandler {
         if (mc.player == null) {
             return;
         }
+        // 轨道 TE 防护：防止区块数据包在 Chunk.read 里被 RTM 的 getBlockType()==null 打断（见 RailTileGuard）
+        RailTileGuard.tick(mc);
         // /tracktool test clientcheck 请求的客户端自检（结果直接打到聊天栏，也会进 latest.log）
         if (com.tracktool.rail2.ExactRailInjector.diagRequested) {
             com.tracktool.rail2.ExactRailInjector.diagRequested = false;

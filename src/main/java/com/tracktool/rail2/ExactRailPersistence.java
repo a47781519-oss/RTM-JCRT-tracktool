@@ -53,8 +53,33 @@ public final class ExactRailPersistence extends WorldSavedData {
             ExactRailPersistence data = get(world);
             data.geos.put(corePos.toLong(), geo);
             data.markDirty();
+            // 同一个格子可能换了一条新轨道（撤销后原地再铺时核心常常落在同一格）：
+            // 让所有玩家重新收一次，否则别的玩家会一直拿着旧几何。
+            ExactRailServerSync.forgetSent(corePos.toLong());
         } catch (Throwable t) {
             System.out.println("[tracktool-exact] PERSIST-FAILED: " + t);
+        }
+    }
+
+    /**
+     * 撤销 / 回滚移除核心时调用：把这格登记的几何一并删掉。
+     *
+     * <p>以前只有 {@link #remember} 没有删除：撤销后这里仍留着已经不存在的轨道的几何，
+     * 存档实证：{@code (198,4,926)} 的平直几何和 {@code (198,5,926)} 的上坡几何同时在表里。
+     * 以后哪条轨道的核心恰好落到这一格，就会被套上别人的几何。</p>
+     */
+    public static void forget(World world, BlockPos corePos) {
+        if (world == null || world.isRemote || corePos == null) {
+            return;
+        }
+        try {
+            ExactRailPersistence data = get(world);
+            if (data.geos.remove(corePos.toLong()) != null) {
+                data.markDirty();
+            }
+            ExactRailServerSync.forgetSent(corePos.toLong());
+        } catch (Throwable t) {
+            System.out.println("[tracktool-exact] FORGET-FAILED: " + t);
         }
     }
 

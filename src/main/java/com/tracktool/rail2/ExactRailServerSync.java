@@ -38,6 +38,16 @@ public final class ExactRailServerSync {
     /** 每个玩家已经收到过点表的核心（退出游戏时清空 ⇒ 重进会重发）。 */
     private static final Map<UUID, Set<Long>> SENT = new ConcurrentHashMap<UUID, Set<Long>>();
 
+    /**
+     * 这个核心格子的几何变了（新铺 / 撤销）：从每个玩家的「已发」集合里删掉。
+     * 不删的话，这一格对已经收过旧几何的玩家永远不会再发（直到他重进世界）。
+     */
+    public static void forgetSent(long key) {
+        for (Set<Long> s : SENT.values()) {
+            s.remove(key);
+        }
+    }
+
     private int counter;
 
     @SubscribeEvent

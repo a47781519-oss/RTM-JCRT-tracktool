@@ -27,5 +27,8 @@ public final class TrackToolNetwork {
         TrackToolCore.NETWORK.registerMessage(Packets.Result.Handler.class, Packets.Result.class, id++, Side.CLIENT);
         TrackToolCore.NETWORK.registerMessage(Packets.ExactRail.Diag.Handler.class,
                 Packets.ExactRail.Diag.class, id++, Side.CLIENT);
+        // 新消息一律加在最后：前面的 id 不动
+        TrackToolCore.NETWORK.registerMessage(Packets.ExactRailForget.Handler.class,
+                Packets.ExactRailForget.class, id++, Side.CLIENT);
     }
 }

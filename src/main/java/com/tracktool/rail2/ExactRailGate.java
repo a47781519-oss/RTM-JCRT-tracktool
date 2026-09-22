@@ -35,6 +35,31 @@ public final class ExactRailGate {
     }
 
     /**
+     * 核心被撤销 / 回滚移除之后调用：服务端登记的几何、各玩家的「已发」记录、
+     * 客户端缓存的几何三处一起清掉。
+     *
+     * <p>三处以前都只增不删，而「撤销后原地再铺」时新核心常常落在同一格
+     * （第 70 轮日志：两次铺设前 5 个核心坐标完全相同），旧几何就可能被套到新轨道上。</p>
+     */
+    public static void onCoresRemoved(World world, java.util.Collection<net.minecraft.util.math.BlockPos> cores) {
+        if (world == null || world.isRemote || cores == null || cores.isEmpty()) {
+            return;
+        }
+        long[] keys = new long[cores.size()];
+        int n = 0;
+        for (net.minecraft.util.math.BlockPos p : cores) {
+            ExactRailPersistence.forget(world, p);
+            keys[n++] = p.toLong();
+        }
+        try {
+            com.tracktool.TrackToolCore.NETWORK.sendToDimension(
+                    new com.tracktool.net.Packets.ExactRailForget(keys), world.provider.getDimension());
+        } catch (Throwable t) {
+            System.out.println("[tracktool-exact] FORGET 发包失败: " + t);
+        }
+    }
+
+    /**
      * 用解析几何铺一条弯道（整条一个核心）。
      *
      * <p>会把参数串写进<b>两端</b> RailPosition 的 {@code scriptArgs}（RTM 会随 TE 同步到客户端，

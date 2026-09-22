@@ -312,6 +312,52 @@ public final class Packets {
     }
 
     /** Placement progress. */
+    /**
+     * 服务端 → 客户端：这些核心已被撤掉，把缓存的精确几何丢掉。
+     * 坐标用 {@link BlockPos#toLong()} 编码。
+     */
+    public static final class ExactRailForget implements IMessage {
+        public long[] keys = new long[0];
+
+        public ExactRailForget() {
+        }
+
+        public ExactRailForget(long[] keys) {
+            this.keys = keys;
+        }
+
+        @Override
+        public void fromBytes(ByteBuf buf) {
+            int n = buf.readInt();
+            if (n < 0 || n > 65536) {
+                n = 0;
+            }
+            this.keys = new long[n];
+            for (int i = 0; i < n; i++) {
+                this.keys[i] = buf.readLong();
+            }
+        }
+
+        @Override
+        public void toBytes(ByteBuf buf) {
+            buf.writeInt(this.keys.length);
+            for (long k : this.keys) {
+                buf.writeLong(k);
+            }
+        }
+
+        public static final class Handler implements IMessageHandler<ExactRailForget, IMessage> {
+            @Override
+            public IMessage onMessage(ExactRailForget m, MessageContext ctx) {
+                // 缓存是 ConcurrentHashMap，与 ExactRail.Handler 一样直接在网络线程里改
+                for (long k : m.keys) {
+                    com.tracktool.rail2.ExactRailInjector.forgetClient(k);
+                }
+                return null;
+            }
+        }
+    }
+
     public static final class Progress implements IMessage {
         public int done;
         public int total;

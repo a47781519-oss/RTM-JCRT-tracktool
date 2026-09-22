@@ -304,6 +304,14 @@ public final class RailPlacer {
             } catch (Throwable t) {
                 TrackToolCoreHolder.log("undo: 读核心占用格失败 " + core, t);
             }
+            // ★ 再按这一段的两端锚点圈一个盒子扫一遍：cellsOf 靠重算方块表，与当初真实写下的格子
+            //   不一定一致（精确几何、接头补格、读档后退回贝塞尔）。存档实证：第 70 轮一次撤销之后
+            //   (326,4,917)、(339,4,914) 两格仍指向已被撤掉的核心。盒子扫描不依赖任何重算。
+            try {
+                recheck.addAll(railCellsAroundSegment(world, core));
+            } catch (Throwable t) {
+                TrackToolCoreHolder.log("undo: 段落盒子扫描失败 " + core, t);
+            }
         }
         // ① 先把本次铺下的核心整块清掉（留着方块 = 留着一颗随时会崩的雷）
         //   ★ 不再跳过未加载的区块：跳过就等于把那几段轨道永远留在世界里（长线路铺完走远了再撤销，
@@ -313,6 +321,13 @@ public final class RailPlacer {
                 world.removeTileEntity(p);
                 world.setBlockToAir(p);
             }
+        }
+        // ①' 这些核心已经没了：服务端登记的精确几何、各玩家的「已发」记录、客户端缓存一并清掉，
+        //    否则原地再铺时新核心落在同一格，就可能被套上旧几何（见 ExactRailGate.onCoresRemoved）。
+        try {
+            com.tracktool.rail2.ExactRailGate.onCoresRemoved(world, undo.cores);
+        } catch (Throwable t) {
+            TrackToolCoreHolder.log("undo: 清除精确几何记录失败", t);
         }
         // ② 再按快照倒序还原；核心方块要连同当初那份 TE 数据一起还原
         for (int i = undo.positions.size() - 1; i >= 0; i--) {
@@ -357,6 +372,44 @@ public final class RailPlacer {
             TrackToolCoreHolder.log("undo: 残留复查失败", t);
         }
         return cleaned;
+    }
+
+    /**
+     * 一段轨道两端锚点圈出的盒子（水平外扩 4 格、向下 2 格、向上 4 格）里所有轨道方块。
+     * 一段最长约 20 m，盒子最多几千格，撤销是一次性操作，扫得起。
+     * 只负责收集，去留由 {@code RoadbedPreClear.sweepAfterUndo} 按归属判定（别人的活轨道不动）。
+     */
+    static java.util.List<BlockPos> railCellsAroundSegment(World world, BlockPos corePos) {
+        java.util.List<BlockPos> out = new ArrayList<BlockPos>();
+        TileEntity te = world.getTileEntity(corePos);
+        if (!(te instanceof TileEntityLargeRailCore)) {
+            return out;
+        }
+        RailPosition[] rps = ((TileEntityLargeRailCore) te).getRailPositions();
+        if (rps == null || rps.length < 2 || rps[0] == null || rps[1] == null) {
+            return out;
+        }
+        int x0 = Math.min(Math.min(rps[0].blockX, rps[1].blockX), corePos.getX()) - 4;
+        int x1 = Math.max(Math.max(rps[0].blockX, rps[1].blockX), corePos.getX()) + 4;
+        int y0 = Math.max(0, Math.min(Math.min(rps[0].blockY, rps[1].blockY), corePos.getY()) - 2);
+        int y1 = Math.min(255, Math.max(Math.max(rps[0].blockY, rps[1].blockY), corePos.getY()) + 4);
+        int z0 = Math.min(Math.min(rps[0].blockZ, rps[1].blockZ), corePos.getZ()) - 4;
+        int z1 = Math.max(Math.max(rps[0].blockZ, rps[1].blockZ), corePos.getZ()) + 4;
+        if ((long) (x1 - x0 + 1) * (z1 - z0 + 1) * (y1 - y0 + 1) > 200000L) {
+            return out;                     // 异常大的盒子（数据坏了）：不扫，其它兆底照样生效
+        }
+        BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos();
+        for (int x = x0; x <= x1; x++) {
+            for (int z = z0; z <= z1; z++) {
+                for (int y = y0; y <= y1; y++) {
+                    m.setPos(x, y, z);
+                    if (world.getBlockState(m).getBlock() instanceof jp.ngt.rtm.rail.BlockLargeRailBase) {
+                        out.add(m.toImmutable());
+                    }
+                }
+            }
+        }
+        return out;
     }
 
     /** 清掉一颗"没有 railPositions"的空核心（它会让服务端在打包区块时 NPE）。 */

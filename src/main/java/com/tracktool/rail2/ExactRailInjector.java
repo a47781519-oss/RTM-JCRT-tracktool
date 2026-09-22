@@ -83,6 +83,17 @@ public final class ExactRailInjector {
     /** 最近一次铺设真实铺下的方块表（发包与补发都用它）。 */
     public static volatile int[][] lastBlockTable = null;
 
+    /**
+     * 客户端：服务端撤掉了这个核心，把缓存的几何、参数、方块表一并丢掉。
+     * 否则原地再铺时，客户端扫描可能在新数据到达之前就拿旧的套到新核心上。
+     * {@code key} 与 {@link net.minecraft.util.math.BlockPos#toLong()} 同一编码。
+     */
+    public static void forgetClient(long key) {
+        ARGS.remove(key);
+        SAMPLES.remove(key);
+        BLOCKS.remove(key);
+    }
+
     public static void rememberBlocks(int x, int y, int z, int[][] table) {
         if (table != null && table.length > 0) {
             BLOCKS.put(key(x, y, z), table);
