@@ -1,0 +1,125 @@
+itemGroup.rtm_track=RTM Track Laying
+item.tracktool:rail_staff.name=Rail Laying Staff
+
+tracktool.gui.title=Rail Laying Staff
+tracktool.mode.straight=Straight
+tracktool.mode.curve=Curve
+tracktool.mode.connect=Connect
+
+tracktool.info.selected=Selected ends: %s
+tracktool.info.mode=Mode: %s
+tracktool.info.length=Total length: %s m
+tracktool.info.segments=Cores: %d, max deviation: %s m
+tracktool.info.no_plan=No plan yet - select a rail end
+tracktool.info.placing=Laying: %d / %d
+tracktool.info.working=Working...
+
+tracktool.field.rise=Rise (m)
+tracktool.field.rise.tip=Raises the track by this many metres over the whole generated length, smoothed by vertical curves.
+tracktool.field.verticalRadius=Vertical curve R (m)
+tracktool.field.verticalRadius.tip=Radius of the parabolic vertical curves used for the grade change.
+tracktool.field.linesLeft=Parallel left
+tracktool.field.linesLeft.tip=Additional parallel tracks on the left of the selected one.
+tracktool.field.linesRight=Parallel right
+tracktool.field.linesRight.tip=Additional parallel tracks on the right of the selected one.
+tracktool.field.spacing=Track spacing (m)
+tracktool.field.spacing.tip=Centre to centre distance of the parallel tracks.
+tracktool.field.railPack=Rail pack
+tracktool.field.railPack.tip=Rail model pack (ModelRail) used for the generated rail.
+tracktool.field.ballast=Ballast
+tracktool.field.ballast.tip=Block placed under the rail; "air" builds the track without ballast.
+tracktool.field.straightLength=Straight length (m)
+tracktool.field.straightLength.tip=Length of the straight track to lay.
+tracktool.field.radius=Radius (m)
+tracktool.field.radius.tip=Radius of the circular arc. Rounded to a whole metre.
+tracktool.field.angle=Turn angle (deg)
+tracktool.field.angle.tip=Total deflection angle of the curve.
+tracktool.field.cant=Cant (deg)
+tracktool.field.cant.tip=Superelevation of the outer rail, in degrees of track roll.
+tracktool.field.cantGradient=Cant gradient (permille)
+tracktool.field.cantGradient.tip=Rate at which the superelevation is applied, used to derive the transition length.
+tracktool.field.autoTransition=Auto transition
+tracktool.field.autoTransition.tip=Take the transition length from the GB50090 reference table for the radius.
+tracktool.field.transition=Transition (m)
+tracktool.field.transition.tip=Easement (transition) length. Disable "Auto transition" to use this value.
+tracktool.field.turn=Direction
+tracktool.field.turn.tip=Curve to the left or to the right of the tangent.
+tracktool.field.cantInvert=Invert cant
+tracktool.field.cantInvert.tip=Raise the inner rail instead of the outer one.
+tracktool.field.connectAuto=Auto solve
+tracktool.field.connectAuto.tip=Let the solver choose the largest, most even radii for the connection.
+tracktool.field.connectCantAdaptive=Adaptive cant
+tracktool.field.connectCantAdaptive.tip=Ignore the cant value below; ramp the cant linearly between the cant of the two rails being joined.
+tracktool.field.connectTransition=Transition (m)
+tracktool.field.connectTransition.tip=Transition length used at the two connection joints.
+
+tracktool.turn.left=Left
+tracktool.turn.right=Right
+tracktool.tip.default=default
+tracktool.tip.rail=Rail pack: %s
+tracktool.tip.ballast=Ballast: %s
+tracktool.tip.usage=Right click a rail to select one of its ends.
+tracktool.ballast.air=air (no ballast)
+
+tracktool.action.back=Back
+tracktool.action.confirm=Confirm
+tracktool.action.undo=Undo
+tracktool.action.cancel=Cancel
+
+tracktool.ref.title=GB50090 reference (R / L)
+tracktool.ref.speed=Design speed %d km/h
+tracktool.ref.legend=Radius(m) / easement length(m)
+
+tracktool.msg.no_permission=You need operator permission to lay rails.
+tracktool.msg.busy=Another generation job is already running.
+tracktool.msg.no_rail=No rail in range - aim at a rail and right click.
+tracktool.msg.too_far=That rail is too far away.
+tracktool.msg.middle=Please select the end of the rail.
+tracktool.msg.deselected=End deselected.
+tracktool.msg.selected_one=End 1 selected. Select a second end for connect mode.
+tracktool.msg.selected_two=Both ends selected.
+tracktool.msg.reset_newest=More than two ends selected - only the newest one is kept.
+tracktool.msg.cleared=Selection cleared.
+tracktool.msg.back_done=Last selection removed.
+tracktool.msg.need_end=Select a rail end first.
+tracktool.msg.need_two=Connect mode needs two selected ends.
+tracktool.msg.nothing_to_undo=Nothing to undo.
+tracktool.msg.undone=Undo done (%s blocks restored).
+tracktool.msg.queued=Generating rail...
+tracktool.msg.placed=Rail laid: %s cores, %s blocks.
+tracktool.msg.rollback=Generation failed after %s cores - rolled back.
+tracktool.msg.no_rail_pack=Rail model pack not found on the server.
+tracktool.msg.two_ends_connect_only=Two ends selected: use connect mode.
+
+tracktool.err.field=Invalid value for %s (%s)
+tracktool.err.empty=empty
+tracktool.err.not_number=not a number
+tracktool.err.clamped=out of range, clamped
+tracktool.err.no_start=Select a rail end first.
+tracktool.err.need_two=Connect mode needs two selected ends.
+tracktool.err.two_ends_connect_only=Two ends selected: use connect mode.
+tracktool.err.geometry=The requested geometry is not valid.
+tracktool.err.zero_radius=Radius must not be zero.
+tracktool.err.zero_angle=Turn angle must not be zero.
+tracktool.err.transition_too_long=Transition is too long for this turn angle.
+tracktool.err.too_short=The alignment is too short.
+tracktool.err.too_close=The two ends are too close together.
+tracktool.err.too_many_segments=Too many segments (limit %s).
+tracktool.err.connect_failed=Connection failed.
+tracktool.err.lattice=Internal error: anchor is off the rail lattice.
+tracktool.err.obstacle=Obstacle in the way; enable creative or clear the line.
+tracktool.err.place_failed=Placing a rail core failed.
+tracktool.err.y_too_low=Track is too low (y <= 0) for RTM's rail network code.
+
+tracktool.cmd.mode_usage=/tracktool mode <straight|curve|connect>
+tracktool.cmd.param_usage=/tracktool param <key> <value>
+tracktool.cmd.unknown_param=Unknown parameter: %s
+tracktool.cmd.param_set=%s = %s
+
+key.categories.tracktool=track-tool
+key.tracktool.open=Open laying staff GUI
+key.tracktool.cancel=Cancel rail selection
+tracktool.err.connect_radius=Radius too large: these two ends allow at most %s m (lower it, or enable auto-solve).
+tracktool.err.connect_parallel=The ends are parallel but offset by %s m; a single curve cannot join them (an S-curve is needed).
+tracktool.err.connect_facing=The two ends face away from each other - pick the opposite end.
+tracktool.info.connect_solved=Auto: radius %s m, transition %s m

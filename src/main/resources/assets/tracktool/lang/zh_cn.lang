@@ -1,0 +1,125 @@
+itemGroup.rtm_track=RTM铺轨
+item.tracktool:rail_staff.name=铺轨权杖
+
+tracktool.gui.title=铺轨权杖
+tracktool.mode.straight=直线铺设
+tracktool.mode.curve=弯道生成
+tracktool.mode.connect=连接模式
+
+tracktool.info.selected=已选端点 %s
+tracktool.info.mode=当前模式：%s
+tracktool.info.length=曲线总长：%s 米
+tracktool.info.segments=轨道分段：%d 段，最大偏差：%s 米
+tracktool.info.no_plan=暂无方案——请对准铁轨右键选中端点
+tracktool.info.placing=正在铺设：%d / %d
+tracktool.info.working=处理中……
+
+tracktool.field.rise=抬高高度(米)
+tracktool.field.rise.tip=整段轨道抬高的高度，单位米；坡度为“竖曲线+直线+竖曲线”平滑过渡。
+tracktool.field.verticalRadius=竖曲线半径(米)
+tracktool.field.verticalRadius.tip=坡度变化处所用竖曲线的半径。
+tracktool.field.linesLeft=左侧平行线
+tracktool.field.linesLeft.tip=在选中轨道左侧额外铺设的平行线数量。
+tracktool.field.linesRight=右侧平行线
+tracktool.field.linesRight.tip=在选中轨道右侧额外铺设的平行线数量。
+tracktool.field.spacing=线间距(米)
+tracktool.field.spacing.tip=平行线中心线之间的距离，必须为整数米。
+tracktool.field.railPack=轨道包
+tracktool.field.railPack.tip=生成轨道使用的 RTM 轨道模型包（ModelRail）。
+tracktool.field.ballast=路基
+tracktool.field.ballast.tip=轨道下方的路基方块；“空气”表示不生成路基。
+tracktool.field.straightLength=直线长度(米)
+tracktool.field.straightLength.tip=需要铺设的直线长度。
+tracktool.field.radius=弯道半径(米)
+tracktool.field.radius.tip=圆曲线半径，必须为整数米，非整数四舍五入。
+tracktool.field.angle=弯角(度)
+tracktool.field.angle.tip=整段弯道的转向角。
+tracktool.field.cant=外轨超高(度)
+tracktool.field.cant.tip=外轨抬高的角度，即轨道横断面倾角。
+tracktool.field.cantGradient=超高顺坡率(‰)
+tracktool.field.cantGradient.tip=超高渐变的速率，用于推算缓和曲线长度。
+tracktool.field.autoTransition=自动缓和曲线
+tracktool.field.autoTransition.tip=按 GB50090 参考表根据半径自动取缓和曲线长度。
+tracktool.field.transition=缓和曲线长(米)
+tracktool.field.transition.tip=缓和曲线（回旋线）长度；关闭“自动”后使用此值。
+tracktool.field.turn=弯曲方向
+tracktool.field.turn.tip=相对切线向左或向右弯曲。
+tracktool.field.cantInvert=超高反向
+tracktool.field.cantInvert.tip=改为抬高内轨（一般不需要）。
+tracktool.field.connectAuto=自动解算
+tracktool.field.connectAuto.tip=由程序自动求解半径最大且均匀的连接曲线。
+tracktool.field.connectCantAdaptive=外轨超高自适应
+tracktool.field.connectCantAdaptive.tip=勾选后忽略下面的超高数值，整段连接线的外轨超高在两端既有超高之间按里程线性过渡（补缺口时两端一致即全程等超高）。
+tracktool.field.connectTransition=缓和曲线长(米)
+tracktool.field.connectTransition.tip=连接处使用的缓和曲线长度。
+
+tracktool.turn.left=左
+tracktool.turn.right=右
+tracktool.tip.default=默认
+tracktool.tip.rail=轨道包：%s
+tracktool.tip.ballast=路基：%s
+tracktool.tip.usage=对准铁轨右键可选中其一端。
+tracktool.ballast.air=空气（无路基）
+
+tracktool.action.back=回退
+tracktool.action.confirm=确认
+tracktool.action.undo=撤销
+tracktool.action.cancel=取消
+
+tracktool.ref.title=GB50090 参考表（半径/缓和曲线长）
+tracktool.ref.speed=设计速度 %d km/h
+tracktool.ref.legend=半径(米) / 缓和曲线长度(米)
+
+tracktool.msg.no_permission=权限不足：需要 OP 权限。
+tracktool.msg.busy=已有铺设任务正在进行，请稍候。
+tracktool.msg.no_rail=附近没有铁轨——请对准铁轨右键。
+tracktool.msg.too_far=该铁轨距离太远。
+tracktool.msg.middle=请选择轨道端侧。
+tracktool.msg.deselected=已取消该端点。
+tracktool.msg.selected_one=已选中第 1 个端点；连接模式还需选择第 2 个端点。
+tracktool.msg.selected_two=两端点已选中。
+tracktool.msg.reset_newest=选择超过两个端点，仅保留最新选择的一个。
+tracktool.msg.cleared=已取消所有端点。
+tracktool.msg.back_done=已回退上一次选择。
+tracktool.msg.need_end=请先选中轨道端点。
+tracktool.msg.need_two=连接模式需要同时选中两端铁轨。
+tracktool.msg.nothing_to_undo=没有可撤销的操作。
+tracktool.msg.undone=已撤销（恢复 %s 个方块）。
+tracktool.msg.queued=正在生成轨道……
+tracktool.msg.placed=铺设完成：%s 段轨道核心，%s 个方块。
+tracktool.msg.rollback=铺设失败，已回滚 %s 段。
+tracktool.msg.no_rail_pack=服务端未找到该轨道包。
+tracktool.msg.two_ends_connect_only=已选中两端，请使用连接模式。
+
+tracktool.err.field=%s 的取值非法（%s）
+tracktool.err.empty=空值
+tracktool.err.not_number=不是数字
+tracktool.err.clamped=超出范围，已取边界值
+tracktool.err.no_start=请先选中轨道端点。
+tracktool.err.need_two=连接模式需要同时选中两端铁轨。
+tracktool.err.two_ends_connect_only=已选中两端，请使用连接模式。
+tracktool.err.geometry=几何条件不成立，请调整参数。
+tracktool.err.zero_radius=半径不能为 0。
+tracktool.err.zero_angle=弯角不能为 0。
+tracktool.err.transition_too_long=该弯角下缓和曲线过长，无法保留圆曲线。
+tracktool.err.too_short=线形过短，无法生成。
+tracktool.err.too_close=两个端点距离过近。
+tracktool.err.too_many_segments=分段数超过上限（%s）。
+tracktool.err.connect_failed=连接失败。
+tracktool.err.lattice=内部错误：锚点不在 RTM 轨道网格上。
+tracktool.err.obstacle=线路上有障碍物；请使用创造模式或清理线路。
+tracktool.err.place_failed=轨道核心放置失败。
+tracktool.err.y_too_low=轨道高度过低（y ≤ 0），RTM 的轨道网络代码无法处理。
+
+tracktool.cmd.mode_usage=/tracktool mode <straight|curve|connect>
+tracktool.cmd.param_usage=/tracktool param <参数> <值>
+tracktool.cmd.unknown_param=未知参数：%s
+tracktool.cmd.param_set=%s = %s
+
+key.categories.tracktool=track-tool 铺轨
+key.tracktool.open=打开铺轨权杖 GUI
+key.tracktool.cancel=取消轨道端点选择
+tracktool.err.connect_radius=半径放不下：这两个端点最大只能用 %s 米（改小半径或勾选自动解算）。
+tracktool.err.connect_parallel=两端平行且横向错开 %s 米，单个弯道接不上（需要 S 形，暂不支持）。
+tracktool.err.connect_facing=两端朝向背离，接不上：请改选对面那一端。
+tracktool.info.connect_solved=自动解算：半径 %s 米，缓和曲线 %s 米

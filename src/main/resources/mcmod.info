@@ -1,0 +1,16 @@
+[
+  {
+    "modid": "tracktool",
+    "name": "track-tool",
+    "description": "RTM rail laying assistant: laying staff with endpoint selection, curve / straight / connect generation.",
+    "version": "${version}",
+    "mcversion": "1.12.2",
+    "url": "",
+    "updateUrl": "",
+    "authorList": ["tracktool"],
+    "credits": "RealTrainMod by jp.ngt",
+    "logoFile": "",
+    "screenshots": [],
+    "dependencies": ["rtm", "ngtlib"]
+  }
+]

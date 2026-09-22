@@ -1,0 +1,41 @@
+# ---- 第三方前置：绝不入库 ----
+# RTM / NGTLib 是 jp.ngt 的作品，只作编译期依赖，自行放到 libs/ 下（见 README「构建」）
+libs/*.jar
+
+# ---- 构建产物 ----
+build/
+out/
+bin/
+
+# ---- Gradle ----
+.gradle/
+gradle-app.setting
+!gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
+
+# ---- ForgeGradle 运行目录 ----
+run/
+logs/
+crash-reports/
+eclipse/
+
+# ---- IDE ----
+.idea/
+*.iml
+*.ipr
+*.iws
+.classpath
+.project
+.settings/
+.vscode/
+
+# ---- 备份 / 临时 ----
+*.b[0-9]
+*.bak
+*.orig
+*.rej
+*~
+
+# ---- 系统 ----
+.DS_Store
+Thumbs.db

@@ -1,0 +1,84 @@
+buildscript {
+    repositories {
+        maven { url = 'https://files.minecraftforge.net/maven' }
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'net.minecraftforge.gradle:ForgeGradle:2.3-SNAPSHOT'
+    }
+}
+
+apply plugin: 'net.minecraftforge.gradle.forge'
+
+version = '0.1.0'
+group = 'com.tracktool'
+archivesBaseName = 'tracktool'
+
+sourceCompatibility = targetCompatibility = '1.8'
+compileJava {
+    sourceCompatibility = targetCompatibility = '1.8'
+    options.encoding = 'UTF-8'
+}
+
+minecraft {
+    version = '1.12.2-14.23.5.2768'
+    runDir = 'run'
+    mappings = 'stable_39'
+    makeObfSourceJar = false
+}
+
+repositories {
+    flatDir { dirs 'libs' }
+}
+
+dependencies {
+    // RTM / NGTLib are compile-only: they are supplied by the running game instance.
+    compileOnly files('libs/RTM-2.4.24-43.jar', 'libs/NGTLib-2.4.21-38.jar')
+}
+
+processResources {
+    inputs.property 'version', project.version
+
+    from(sourceSets.main.resources.srcDirs) {
+        include 'mcmod.info'
+        expand 'version': project.version
+    }
+    from(sourceSets.main.resources.srcDirs) {
+        exclude 'mcmod.info'
+    }
+}
+
+jar {
+    manifest {
+        attributes([
+                'Specification-Title'     : 'track-tool',
+                'Specification-Vendor'    : 'tracktool',
+                'Specification-Version'   : '1',
+                'Implementation-Title'    : project.name,
+                'Implementation-Version'  : project.version,
+                'Implementation-Vendor'   : 'tracktool',
+                'Implementation-Timestamp': new Date().format("yyyy-MM-dd'T'HH:mm:ssZ")
+        ])
+    }
+}
+
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+    options.compilerArgs << '-Xlint:deprecation'
+}
+
+// 离线自检任务：用 ForgeGradle 提供的完整 classpath 跑 rail2 的 main（不启动游戏）
+// 连接模式（直线-缓和-圆-缓和-直线）的端点闭合自检
+task connectTest(type: JavaExec) {
+    group = 'verification'
+    description = 'Check that connect-mode alignments really land on both joints'
+    classpath = sourceSets.main.runtimeClasspath
+    main = 'com.tracktool.rail2.ConnectSelfTest'
+}
+
+task selfTest(type: JavaExec) {
+    group = 'verification'
+    description = 'Run rail2 offline self tests (geometry / codec / RailMap consistency)'
+    classpath = sourceSets.main.runtimeClasspath
+    main = 'com.tracktool.rail2.ExactRailMapSelfTest'
+}
