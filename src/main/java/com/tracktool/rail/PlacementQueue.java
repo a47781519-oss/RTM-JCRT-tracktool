@@ -233,6 +233,14 @@ public final class PlacementQueue {
                 t.player.getName(), t.placed, t.undo.size(),
                 System.currentTimeMillis() - t.startTime);
         SelectionManager.INSTANCE.pushUndo(t.session, t.undo);
+        // 铺完顺手把周围的无主旧路基扫掉：那些方块有实心碰撞箱，
+        // 会把列车顶住（但不致脱轨）。只清找不到核心的，详见 OrphanRoadbedSweeper。
+        try {
+            com.tracktool.rail2.OrphanRoadbedSweeper.INSTANCE.enqueue(
+                    t.player.world, t.player, t.undo.positions, t.undo.cores);
+        } catch (Throwable e) {
+            TrackToolCore.warn("roadbed sweep enqueue failed: %s", e.toString());
+        }
         Packets.Result r = new Packets.Result();
         r.ok = true;
         r.blocks = t.undo.size();

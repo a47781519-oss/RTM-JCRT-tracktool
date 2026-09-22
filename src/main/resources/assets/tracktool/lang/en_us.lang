@@ -126,3 +126,4 @@ tracktool.info.connect_solved=Auto: radius %s m, transition %s m
 tracktool.err.connect_s_failed=These two ends need an S curve, but there is not enough room: move the ends further apart or reduce the lateral offset.
 tracktool.info.connect_s=S curve: radius %s m, transition %s m (solved, not adjustable)
 tracktool.info.s_locked=In S mode the radius and transition length are solved for you; only cant is adjustable
+tracktool.msg.roadbed_swept=Cleared %s leftover rail base block(s) with no owning core (they block trains)

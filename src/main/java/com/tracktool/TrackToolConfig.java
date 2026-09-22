@@ -32,6 +32,12 @@ public final class TrackToolConfig {
     /** Force-load chunks that a queued placement touches, so the whole curve gets built. */
     public static boolean forceLoadChunks = true;
     /**
+     * 铺完一段后自动清除周围多少格内的<b>无主</b>旧轨道路基（0 = 关闭）。
+     * 只清找不到核心的底座方块；还连着核心的轨道（包括邻近的平行线）永不动。
+     * 原因见 {@code OrphanRoadbedSweeper}。
+     */
+    public static int roadbedSweepRadius = 50;
+    /**
      * Test harness: execute commands written into config/tracktool/commands.txt.
      * Off by default and only meant for automated acceptance runs.
      */
@@ -67,6 +73,10 @@ public final class TrackToolConfig {
                     30, 86400, "Seconds before an idle selection is dropped.") * 1000L;
             packetRateLimit = cfg.getInt("packetRateLimit", "general", packetRateLimit, 5, 400,
                     "Maximum accepted packets per second from a single player.");
+            roadbedSweepRadius = cfg.getInt("roadbedSweepRadius", "general", roadbedSweepRadius, 0, 128,
+                    "After each placement, clear ORPHANED old rail base blocks (no owning core) "
+                            + "within this many blocks. They have a solid hitbox and block trains. "
+                            + "0 disables. Rails that still have their core are never touched.");
             testCommandFile = cfg.getBoolean("testCommandFile", "debug", testCommandFile,
                     "Development harness: run commands written to config/tracktool/commands.txt.");
         } catch (Exception e) {

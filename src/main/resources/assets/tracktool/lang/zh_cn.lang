@@ -126,3 +126,4 @@ tracktool.info.connect_solved=自动解算：半径 %s 米，缓和曲线 %s 米
 tracktool.err.connect_s_failed=两端需要 S 形（先弯一边再弯回来），但现有间距放不下：请拉开两端距离、或减小横向错开量。
 tracktool.info.connect_s=S 形解算：半径 %s 米，缓和曲线 %s 米（自动，不可调）
 tracktool.info.s_locked=S 形下半径与缓和曲线长由解算器决定，只能调超高
+tracktool.msg.roadbed_swept=已清除 %s 块残留的旧轨道路基（找不到核心的底座方块，会挡住列车）
