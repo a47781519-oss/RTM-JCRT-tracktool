@@ -28,6 +28,10 @@ public final class RailPlan {
     /** 连接模式：两端朝向导致必须绕远路（长度 &gt; 3 倍弦长）时置位，提示玩家换一端。 */
     public boolean warnDetour;
     public double detourRatio;
+    /** 连接模式：本次用的是 S 形（反向曲线）解算器。
+     *  置位时半径与缓和曲线长由解算器自定，GUI 会把那两个输入框收起来，只留超高可调。 */
+    public boolean sCurve;
+
     /** 连接模式自动解算出的弯道半径 / 缓和曲线长（0 = 没解算过），用于回显给玩家。 */
     public double solvedRadius;
     public double solvedTransition;

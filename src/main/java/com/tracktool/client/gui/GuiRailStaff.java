@@ -48,6 +48,8 @@ public class GuiRailStaff extends GuiScreen {
     private final List<Check> checks = new ArrayList<Check>();
     private final List<Radio> radios = new ArrayList<Radio>();
     private final List<Dropdown> dropdowns = new ArrayList<Dropdown>();
+    /** 纯文字的说明行（跟着内容区一起滚）。 */
+    private final List<Note> notes = new ArrayList<Note>();
 
     private int panelX;
     private int panelW;
@@ -56,12 +58,20 @@ public class GuiRailStaff extends GuiScreen {
     private int contentTop = 48;
     /** 需要重建界面（例如连接模式里自动解算被玩家改半径关掉了）。 */
     private boolean pendingRebuild;
+    /** 上一帧解算结果是不是 S 形；一翻转就要重建面板（半径/缓和曲线行要收起来）。 */
+    private boolean lastSCurve;
     private int contentHeight;
     private int contentBottom;
     private int tableSpeedIndex = 4;
     private long lastSync;
     private boolean dirty;
     private String statusLine = "";
+
+    /** 一行只读说明文字。 */
+    private static final class Note {
+        String text;
+        int baseY;
+    }
 
     /** One labelled text input. */
     private static final class Field {
@@ -100,6 +110,7 @@ public class GuiRailStaff extends GuiScreen {
         this.checks.clear();
         this.radios.clear();
         this.dropdowns.clear();
+        this.notes.clear();
         this.baseY.clear();
         this.panelW = Math.max(150, this.width / 3);
         this.panelX = this.width - this.panelW;
@@ -159,13 +170,24 @@ public class GuiRailStaff extends GuiScreen {
         } else {
             // 连接模式：直线-缓和-圆-缓和-直线。勾上自动解算 = 用能放下的最大半径；
             // 去掉勾选后，下面的半径/超高/缓和曲线长就按玩家填的走（规则与弯道生成一致）。
-            y = this.addCheck(x, y, w, "tracktool.field.connectAuto", s.connectAutoSolve);
-            y = this.addInt(x, y, w, "tracktool.field.radius", s.radiusM, 1, 100000);
+            //
+            // ★ S 形（反向曲线）是个例外：那边的半径与缓和曲线长是解出来的，不是填出来的
+            //   （两个弯加三段直线只有两个自由度，再把半径固死就超定了）。
+            //   所以这时把那四行收起来，只留超高相关的行，免得玩家改了半径却没任何反应。
+            boolean sLocked = this.solvedSCurve();
+            if (!sLocked) {
+                y = this.addCheck(x, y, w, "tracktool.field.connectAuto", s.connectAutoSolve);
+                y = this.addInt(x, y, w, "tracktool.field.radius", s.radiusM, 1, 100000);
+            } else {
+                y = this.addNote(x, y, w, I18n.format("tracktool.info.s_locked"));
+            }
             // 外轨超高自适应：勾上后超高在两端之间线性过渡，下面那个输入框就不起作用了
             y = this.addCheck(x, y, w, "tracktool.field.connectCantAdaptive", s.connectCantAdaptive);
             y = this.addDouble(x, y, w, "tracktool.field.cant", s.cantDeg, -TrackSpec.MAX_CANT_DEG, TrackSpec.MAX_CANT_DEG);
-            y = this.addCheck(x, y, w, "tracktool.field.autoTransition", s.autoTransition);
-            y = this.addDouble(x, y, w, "tracktool.field.transition", s.transitionLength, 1.0D, 5000.0D);
+            if (!sLocked) {
+                y = this.addCheck(x, y, w, "tracktool.field.autoTransition", s.autoTransition);
+                y = this.addDouble(x, y, w, "tracktool.field.transition", s.transitionLength, 1.0D, 5000.0D);
+            }
             y = this.addCheck(x, y, w, "tracktool.field.cantInvert", s.cantInvert);
         }
 
@@ -226,6 +248,24 @@ public class GuiRailStaff extends GuiScreen {
         f.tf.setDisabledTextColour(0xFF808080);
         this.fields.add(f);
         return y + ROW_H;
+    }
+
+    /** 用自动换行摆一段说明文字，返回下一行的 y。 */
+    private int addNote(int x, int y, int w, String text) {
+        for (String line : this.fontRenderer.listFormattedStringToWidth(text, w)) {
+            Note n = new Note();
+            n.text = line;
+            n.baseY = y;
+            this.notes.add(n);
+            y += LINE_H;
+        }
+        return y + 4;
+    }
+
+    /** 当前解算结果是否走的 S 形分支。 */
+    private boolean solvedSCurve() {
+        return this.spec().mode == TrackSpec.MODE_CONNECT
+                && ClientState.plan != null && ClientState.plan.sCurve;
     }
 
     private int addCheck(int x, int y, int w, String key, boolean value) {
@@ -632,6 +672,11 @@ public class GuiRailStaff extends GuiScreen {
             this.flushNow();
             ClientState.setLocalSpec(this.spec());
         }
+        boolean sNow = this.solvedSCurve();
+        if (sNow != this.lastSCurve) {
+            this.lastSCurve = sNow;
+            this.pendingRebuild = true;     // S 形一启用/停用，半径与缓和曲线行要跟着收放
+        }
         if (this.pendingRebuild) {
             this.pendingRebuild = false;
             this.initGui();                 // 例如自动解算被关掉后，复选框要跟着变
@@ -839,9 +884,10 @@ public class GuiRailStaff extends GuiScreen {
             y += LINE_H;
             // 连接模式：把解算出来的弯道参数显示出来（自动解算时这是唯一能看到半径的地方）
             if (this.spec().mode == TrackSpec.MODE_CONNECT && plan.solvedRadius > 0.0D && this.infoFits(y)) {
-                this.fontRenderer.drawString(I18n.format("tracktool.info.connect_solved",
+                this.fontRenderer.drawString(I18n.format(
+                        plan.sCurve ? "tracktool.info.connect_s" : "tracktool.info.connect_solved",
                         String.format("%.0f", plan.solvedRadius), String.format("%.0f", plan.solvedTransition)),
-                        x, y, 0x9CC6FF, false);
+                        x, y, plan.sCurve ? 0xFFD2A44A : 0x9CC6FF, false);
             }
         } else {
             this.fontRenderer.drawString(I18n.format("tracktool.info.no_plan"), x, y, 0xFFAAAAAA, false);
@@ -874,6 +920,12 @@ public class GuiRailStaff extends GuiScreen {
     private void drawFields() {
         int x = this.panelX + PAD;
         int w = this.panelW - PAD * 2;
+        for (Note n : this.notes) {
+            int y = n.baseY - this.scroll;
+            if (y >= this.contentTop && y <= this.contentBottom) {
+                this.fontRenderer.drawString(n.text, x, y, 0xFFFFD24A, false);
+            }
+        }
         for (Field f : this.fields) {
             int y = f.baseY - this.scroll;
             if (y < this.contentTop || y > this.contentBottom) {

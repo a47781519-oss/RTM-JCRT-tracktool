@@ -123,3 +123,6 @@ tracktool.err.connect_radius=半径放不下：这两个端点最大只能用 %s
 tracktool.err.connect_parallel=两端平行且横向错开 %s 米，单个弯道接不上（需要 S 形，暂不支持）。
 tracktool.err.connect_facing=两端朝向背离，接不上：请改选对面那一端。
 tracktool.info.connect_solved=自动解算：半径 %s 米，缓和曲线 %s 米
+tracktool.err.connect_s_failed=两端需要 S 形（先弯一边再弯回来），但现有间距放不下：请拉开两端距离、或减小横向错开量。
+tracktool.info.connect_s=S 形解算：半径 %s 米，缓和曲线 %s 米（自动，不可调）
+tracktool.info.s_locked=S 形下半径与缓和曲线长由解算器决定，只能调超高

@@ -123,3 +123,6 @@ tracktool.err.connect_radius=Radius too large: these two ends allow at most %s m
 tracktool.err.connect_parallel=The ends are parallel but offset by %s m; a single curve cannot join them (an S-curve is needed).
 tracktool.err.connect_facing=The two ends face away from each other - pick the opposite end.
 tracktool.info.connect_solved=Auto: radius %s m, transition %s m
+tracktool.err.connect_s_failed=These two ends need an S curve, but there is not enough room: move the ends further apart or reduce the lateral offset.
+tracktool.info.connect_s=S curve: radius %s m, transition %s m (solved, not adjustable)
+tracktool.info.s_locked=In S mode the radius and transition length are solved for you; only cant is adjustable

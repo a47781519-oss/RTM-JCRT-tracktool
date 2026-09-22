@@ -76,6 +76,13 @@ task connectTest(type: JavaExec) {
     main = 'com.tracktool.rail2.ConnectSelfTest'
 }
 
+task sCurveTest(type: JavaExec) {
+    group = 'verification'
+    description = 'Check that S-curve (reverse curve) connections close on both joints'
+    classpath = sourceSets.main.runtimeClasspath
+    main = 'com.tracktool.rail2.SCurveSelfTest'
+}
+
 task selfTest(type: JavaExec) {
     group = 'verification'
     description = 'Run rail2 offline self tests (geometry / codec / RailMap consistency)'

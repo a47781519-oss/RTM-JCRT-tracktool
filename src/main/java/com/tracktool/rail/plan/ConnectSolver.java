@@ -40,6 +40,15 @@ public final class ConnectSolver {
     }
 
     public static Alignment solve(TrackSpec spec, RailEnd from, RailEnd to, RailPlan plan) {
+        // ★ 先判 S 形：两端相对弦的偏角反号时，单向弯道在几何上就不可能接得上
+        //   （最典型：两端平行但横向错开），必须走反向曲线。详见 SCurveSolver。
+        if (SCurveSolver.isReverseShape(from, to)) {
+            Alignment s = SCurveSolver.solve(spec, from, to, plan);
+            if (s != null) {
+                return s;
+            }
+            return null;                    // S 形解算已经落了明确的错误码
+        }
         Alignment a = solveTangentCurve(spec, from, to, plan);
         if (a != null || !plan.ok) {
             return a;                       // 有解，或已经给出了明确错误（如半径过大）
@@ -57,7 +66,7 @@ public final class ConnectSolver {
     }
 
     /** 端点闭合校验：位置 &lt; 0.5 m 且朝向 &lt; 1°。 */
-    private static boolean closes(Alignment a, RailEnd from, RailEnd to) {
+    static boolean closes(Alignment a, RailEnd from, RailEnd to) {
         try {
             a.placeAt(from.x, from.z, from.outwardYaw);
             double[] o = new double[7];
@@ -210,7 +219,7 @@ public final class ConnectSolver {
      * 缓和曲线的内移量 p 与切线增量 q —— 直接拿本模组的缓和曲线实体量出来，
      * 不用级数近似，于是装配出来的线路端点是精确闭合的。
      */
-    private static double[] spiralShift(double r, double ls) {
+    static double[] spiralShift(double r, double ls) {
         SpiralElement sp = new SpiralElement(0.0D, 1.0D / r, ls);
         sp.placeAt(0.0D, 0.0D, 0.0D);       // 起点在原点、朝向 +Z，左手边为 +X
         double[] e = new double[2];
