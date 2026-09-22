@@ -551,7 +551,8 @@ public class GuiRailStaff extends GuiScreen {
         setEnabled(100, !busy);
         setEnabled(101, !busy && !two);
         setEnabled(102, !busy && two);
-        setEnabled(200, !busy && (!ClientState.state.ends.isEmpty() || ClientState.state.undoDepth > 0));
+        // 「回退选点」只在有选点时可用；撤掉已铺的轨道是「撤销铺设」的事（两者以前会重叠）
+        setEnabled(200, !busy && !ClientState.state.ends.isEmpty());
         setEnabled(201, !busy && (one || (s.mode == TrackSpec.MODE_CONNECT && two)));
         setEnabled(202, !busy && ClientState.state.undoDepth > 0);
         setEnabled(203, !busy && !ClientState.state.ends.isEmpty());

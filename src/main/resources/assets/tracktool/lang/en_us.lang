@@ -61,9 +61,9 @@ tracktool.tip.ballast=Ballast: %s
 tracktool.tip.usage=Right click a rail to select one of its ends.
 tracktool.ballast.air=air (no ballast)
 
-tracktool.action.back=Back
+tracktool.action.back=Undo point
 tracktool.action.confirm=Confirm
-tracktool.action.undo=Undo
+tracktool.action.undo=Undo rail
 tracktool.action.cancel=Cancel
 
 tracktool.ref.title=GB50090 reference (R / L)
@@ -126,4 +126,8 @@ tracktool.info.connect_solved=Auto: radius %s m, transition %s m
 tracktool.err.connect_s_failed=These two ends need an S curve, but there is not enough room: move the ends further apart or reduce the lateral offset.
 tracktool.info.connect_s=S curve: radius %s m, transition %s m (solved, not adjustable)
 tracktool.info.s_locked=In S mode the radius and transition length are solved for you; only cant is adjustable
-tracktool.msg.roadbed_swept=Cleared %s leftover rail base block(s) with no owning core (they block trains)
+tracktool.err.segment_too_short=This span is too short (%s m) for a single RTM rail: move the two ends further apart
+tracktool.msg.nothing_to_back=No selected point to step back. Use "Undo rail" to remove track you already laid.
+tracktool.msg.undone_clean=Undo done (%s blocks restored, %s leftover rail base block(s) cleared).
+tracktool.msg.preclear=Cleared the new rail's footprint before laying: %s orphaned rail base block(s), %s block(s) of other rails, %s old rail(s) lying on the new line removed. All but the orphans come back with "Undo rail".
+tracktool.msg.preclear_touched=Note: the new rail cuts through %s existing rail(s) (core at %s); their rail base blocks where they overlap were cleared. If it is an abandoned rail, break its core block to remove it completely.

@@ -130,7 +130,19 @@ public final class ExactRailGate {
                 + String.format(" 最大超高=%.2f°(%.0f mm)", peakCant,
                         com.tracktool.rail.RailStandards.cantDegreesToMm(peakCant,
                                 com.tracktool.rail.RailStandards.CANT_BASE_MM)));
-        lastPlaced = ExactRailLayer.placeSegmented(world, start, end, prop, geo, undo, segmentLength);
+        // 调用方没给撤销记录时自己记一份：失败了要能把已经铺下去的那几段拆干净
+        //（带记录的调用方自己负责回滚，这样一次多线操作能整体撤回）。
+        com.tracktool.rail.RailPlacer.UndoRecord rec = undo;
+        if (rec == null) {
+            rec = new com.tracktool.rail.RailPlacer.UndoRecord();
+            rec.rollbackOnly = true;        // 成功后就丢掉 ⇒ 不能拿它当"可撤销"去拆别人的轨道
+        }
+        lastPlaced = ExactRailLayer.placeSegmented(world, start, end, prop, geo, rec, segmentLength);
+        if (lastPlaced.isEmpty() && undo == null && (rec.size() > 0 || !rec.cores.isEmpty())) {
+            int cleaned = com.tracktool.rail.RailPlacer.restore(world, rec);
+            System.out.println("[tracktool-exact] 铺设失败，已回滚本次铺下的 " + rec.cores.size()
+                    + " 个核心（复查清掉 " + cleaned + " 块残留路基）");
+        }
         return !lastPlaced.isEmpty();
     }
 

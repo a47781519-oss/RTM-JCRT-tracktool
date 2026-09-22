@@ -89,6 +89,15 @@ public final class RailPlacer {
             TrackToolCoreHolder.warn("canPlaceRail false at (%d,%d,%d)", start.blockX, start.blockY, start.blockZ);
             return false;
         }
+        // ★ 铺之前先清掉新线路路基范围里的旧底座（见 RoadbedPreClear）：RTM 的 setRail 不清它们，
+        //   只会把正好重合的那格"接管"过来，其余的原样留在线上挡车。
+        //   必须在 snapshot 之前：清掉的无主方块不该进撤销记录（撤销时把实心墙还回来毫无意义）。
+        try {
+            com.tracktool.rail2.RoadbedPreClear.clear(world, railMap.getRailBlockList(prop, true),
+                    java.util.Arrays.asList(start.getNeighborBlockPos(), end.getNeighborBlockPos()), undo);
+        } catch (Throwable t) {
+            TrackToolCoreHolder.log("pre-clear failed", t);
+        }
         snapshot(world, start, end, undo);
         try {
             BlockPos sp = chooseCoreOrigin(world, railMap, prop, start);
@@ -282,12 +291,24 @@ public final class RailPlacer {
      * 同理，本次铺下的核心必须<b>整块清成空气</b>，只 {@code removeTileEntity}
      * 会留下一个核心方块，MC 之后会给它懒建一个同样空的 TE，照样崩。</p>
      */
-    public static void restore(World world, UndoRecord undo) {
-        // ① 先把本次铺下的核心整块清掉（留着方块 = 留着一颗随时会崩的雷）
-        for (BlockPos p : undo.cores) {
-            if (!world.isBlockLoaded(p)) {
-                continue;
+    public static int restore(World world, UndoRecord undo) {
+        // ⓪ 先记下本次铺下的核心【实际】占了哪些格子 —— 核心一撤就再也读不到了。
+        //   快照只管它记下来的格子；没进快照的（铺的时候区块没加载、快照装满、RTM 实际铺的与方块表有出入）
+        //   撤销后会变成没有核心的底座，也就是"撤回之后路基清不干净"。④ 按这份清单兜底。
+        java.util.Set<BlockPos> undoneCores = new java.util.HashSet<BlockPos>(undo.cores);
+        java.util.List<BlockPos> recheck = new ArrayList<BlockPos>();
+        for (BlockPos core : undo.cores) {
+            recheck.add(core);
+            try {
+                recheck.addAll(com.tracktool.rail2.RoadbedPreClear.cellsOf(world, core));
+            } catch (Throwable t) {
+                TrackToolCoreHolder.log("undo: 读核心占用格失败 " + core, t);
             }
+        }
+        // ① 先把本次铺下的核心整块清掉（留着方块 = 留着一颗随时会崩的雷）
+        //   ★ 不再跳过未加载的区块：跳过就等于把那几段轨道永远留在世界里（长线路铺完走远了再撤销，
+        //     核心或底座所在的区块多半已经卸载）。getBlockState 会把区块读进来，撤销是一次性的显式操作，值得。
+        for (BlockPos p : undo.cores) {
             if (world.getBlockState(p).getBlock() instanceof jp.ngt.rtm.rail.BlockLargeRailBase) {
                 world.removeTileEntity(p);
                 world.setBlockToAir(p);
@@ -297,9 +318,6 @@ public final class RailPlacer {
         for (int i = undo.positions.size() - 1; i >= 0; i--) {
             BlockPos p = undo.positions.get(i);
             IBlockState st = undo.states.get(i);
-            if (!world.isBlockLoaded(p)) {
-                continue;
-            }
             world.setBlockState(p, st, 3);
             NBTTagCompound nbt = undo.tiles.get(p);
             if (nbt == null) {
@@ -323,6 +341,22 @@ public final class RailPlacer {
         for (BlockPos p : undo.cores) {
             sweepBrokenCore(world, p);
         }
+        // ④ 按世界实况复查：本次核心占过的格子，加上快照里现在仍是轨道方块的格子，
+        //   凡是无主的、或者还指向刚撤掉的核心的底座，全部清掉。
+        //   别人的活轨道（包括刚从快照里还原回来的那些）不动 —— 判据见 RoadbedVerdict.leftoverAfterUndo。
+        for (int i = 0; i < undo.positions.size(); i++) {
+            BlockPos p = undo.positions.get(i);
+            if (world.getBlockState(p).getBlock() instanceof jp.ngt.rtm.rail.BlockLargeRailBase) {
+                recheck.add(p);
+            }
+        }
+        int cleaned = 0;
+        try {
+            cleaned = com.tracktool.rail2.RoadbedPreClear.sweepAfterUndo(world, recheck, undoneCores);
+        } catch (Throwable t) {
+            TrackToolCoreHolder.log("undo: 残留复查失败", t);
+        }
+        return cleaned;
     }
 
     /** 清掉一颗"没有 railPositions"的空核心（它会让服务端在打包区块时 NPE）。 */
@@ -354,6 +388,19 @@ public final class RailPlacer {
         /** 被覆盖的轨道 TE 的 NBT（只存轨道类，别的方块用不着）。 */
         public final java.util.Map<BlockPos, NBTTagCompound> tiles =
                 new java.util.HashMap<BlockPos, NBTTagCompound>();
+        /**
+         * 铺轨前清理不许碰的核心：端点所在的既有轨道（连接模式是两条）。
+         * 本次操作里已经铺下的核心在 {@link #cores} 里，同样受保护。
+         */
+        public final java.util.Set<BlockPos> protectedCores = new java.util.HashSet<BlockPos>();
+        /** 本次操作的铺轨前清理累计（多段、多线加在一起），铺完报给玩家。 */
+        public final com.tracktool.rail2.RoadbedPreClear.Tally cleared =
+                new com.tracktool.rail2.RoadbedPreClear.Tally();
+        /**
+         * 只用于失败回滚、成功后即丢弃的记录。这种记录不会进撤销栈，所以铺轨前清理拿到它时
+         * 只许清无主方块，别人还活着的轨道一格都不许动（动了就撤不回来）。
+         */
+        public boolean rollbackOnly;
         public String label = "";
         public int dim;
         public long time = System.currentTimeMillis();

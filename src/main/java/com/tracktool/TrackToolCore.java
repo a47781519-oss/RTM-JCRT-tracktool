@@ -29,7 +29,7 @@ public final class TrackToolCore {
 
     public static final String MODID = "tracktool";
     public static final String NAME = "track-tool";
-    public static final String VERSION = "0.1.0";
+    public static final String VERSION = "0.1.4";
 
     @Mod.Instance(TrackToolCore.MODID)
     public static TrackToolCore instance;
@@ -82,7 +82,6 @@ public final class TrackToolCore {
         // 区块加载时清掉"没有 railPositions 的空核心"：RTM 的 writeRailData 不判空，
         // 留着一颗就会让服务端在打包区块时 NPE，存档再也进不去（第 62 轮实测）
         MinecraftForge.EVENT_BUS.register(new com.tracktool.rail2.BrokenCoreSweeper());
-        MinecraftForge.EVENT_BUS.register(com.tracktool.rail2.OrphanRoadbedSweeper.INSTANCE);
         proxy.init(event);
     }
 

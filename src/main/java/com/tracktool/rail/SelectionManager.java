@@ -273,12 +273,15 @@ public final class SelectionManager {
                 s.lastMessage = "tracktool.msg.cleared";
                 break;
             case ACTION_BACK:
+                // 「回退选点」只管选点，「撤销铺设」只管已铺的轨道 —— 两者不再互相兜底。
+                // 以前没选点时回退会落到 undo()：铺完轨端点被清空，于是两个按钮做的是同一件事，
+                // 而且想退一个选点的人会在不知情时把刚铺好的整条线撤掉。
                 if (!s.ends.isEmpty()) {
                     s.ends.remove(s.ends.size() - 1);
                     s.lastMessage = "tracktool.msg.back_done";
                 } else {
-                    this.undo(player, s);
-                    return;
+                    s.lastMessage = "tracktool.msg.nothing_to_back";
+                    player.sendMessage(new TextComponentTranslation("tracktool.msg.nothing_to_back"));
                 }
                 break;
             case ACTION_CONFIRM:
@@ -353,8 +356,11 @@ public final class SelectionManager {
                 RailPlacer.TrackToolCoreHolder.warn("exact 结果: 取不到轨道包 ⇒ 回退旧路径");
             }
             RailPlacer.UndoRecord undoExact = new RailPlacer.UndoRecord();
+            // 端点所在的既有轨道（连接模式是两条）：铺轨前清理绝不能把它们当"旧轨道"拆掉
+            undoExact.protectedCores.addAll(anchorCores(from, to));
             com.tracktool.rail2.ExactRailLayer.resetTableStats();
             int laidLines = 0;
+            boolean lineFailed = false;
             for (int li = 0; propExact != null && li < plan.alignments.size(); li++) {
                 jp.ngt.rtm.rail.util.RailPosition ra = null;
                 jp.ngt.rtm.rail.util.RailPosition rb = null;
@@ -372,10 +378,24 @@ public final class SelectionManager {
                 }
                 if (this.placeExactLine(player, s, plan, li, ra, rb, propExact, undoExact)) {
                     laidLines++;
+                } else {
+                    lineFailed = true;
+                    break;
                 }
+            }
+            if (lineFailed || (laidLines == 0 && (undoExact.size() > 0 || !undoExact.cores.isEmpty()))) {
+                // ★ 一次操作要么整体成功，要么不留痕迹。以前这里只看 laidLines>0：
+                //   · 一条都没成功 ⇒ 已经铺下的那几段既没进撤销栈、也没回滚，接着还落到旧路径再铺一遍；
+                //   · 多线里有一条失败 ⇒ 报"铺设完成"，缺的那条只在日志里提一句。
+                //   两种都会在世界里留下撤不掉的半截轨道和无主路基。
+                int cleaned = RailPlacer.restore(player.world, undoExact);
+                RailPlacer.TrackToolCoreHolder.warn("exact 结果: 有线路失败 ⇒ 已整体回滚（%s 个核心，复查清掉 %s 块）",
+                        String.valueOf(undoExact.cores.size()), String.valueOf(cleaned));
+                laidLines = 0;
             }
             if (laidLines > 0) {
                 this.pushUndo(s, undoExact);
+                reportPreClear(player, undoExact);
                 RailPlacer.TrackToolCoreHolder.warn("exact 结果: ★新几何生效（%s 条线，共 %s 个核心，快照 %s 格）",
                         String.valueOf(laidLines), String.valueOf(undoExact.cores.size()),
                         String.valueOf(undoExact.size()));
@@ -421,7 +441,9 @@ public final class SelectionManager {
             return;
         }
         s.busy = true;
-        PlacementQueue.INSTANCE.submit(new PlacementQueue.Task(player.getUniqueID(), player, s, plan, prop, creative));
+        PlacementQueue.Task task = new PlacementQueue.Task(player.getUniqueID(), player, s, plan, prop, creative);
+        task.undo.protectedCores.addAll(anchorCores(from, to));
+        PlacementQueue.INSTANCE.submit(task);
         s.lastMessage = "tracktool.msg.queued";
         this.sync(player, s);
     }
@@ -445,10 +467,52 @@ public final class SelectionManager {
             this.sync(player, s);
             return;
         }
-        RailPlacer.restore(player.world, rec);
-        player.sendMessage(new TextComponentTranslation("tracktool.msg.undone",
-                String.valueOf(rec.positions.size())));
+        int cleaned = RailPlacer.restore(player.world, rec);
+        if (cleaned > 0) {
+            player.sendMessage(new TextComponentTranslation("tracktool.msg.undone_clean",
+                    String.valueOf(rec.positions.size()), String.valueOf(cleaned)));
+        } else {
+            player.sendMessage(new TextComponentTranslation("tracktool.msg.undone",
+                    String.valueOf(rec.positions.size())));
+        }
         this.sync(player, s);
+    }
+
+    /** 端点所在的既有轨道的核心：铺轨前清理不许动它们。 */
+    static java.util.Set<net.minecraft.util.math.BlockPos> anchorCores(RailEnd... ends) {
+        java.util.Set<net.minecraft.util.math.BlockPos> out = new java.util.HashSet<net.minecraft.util.math.BlockPos>();
+        for (RailEnd e : ends) {
+            if (e != null && e.corePos != null && !e.corePos.equals(net.minecraft.util.math.BlockPos.ORIGIN)) {
+                out.add(e.corePos);
+            }
+        }
+        return out;
+    }
+
+    /** 铺完之后把铺轨前清理做了什么告诉玩家（什么都没清就不说话）。 */
+    public static void reportPreClear(EntityPlayerMP player, RailPlacer.UndoRecord rec) {
+        com.tracktool.rail2.RoadbedPreClear.Tally t = rec.cleared;
+        if (t.isEmpty()) {
+            return;
+        }
+        player.sendMessage(new TextComponentTranslation("tracktool.msg.preclear",
+                String.valueOf(t.orphans), String.valueOf(t.foreignCells), String.valueOf(t.removedRails.size())));
+        if (!t.touchedRails.isEmpty()) {
+            StringBuilder where = new StringBuilder();
+            int n = 0;
+            for (net.minecraft.util.math.BlockPos p : t.touchedRails) {
+                if (n++ >= 4) {
+                    where.append(" …");
+                    break;
+                }
+                if (where.length() > 0) {
+                    where.append(", ");
+                }
+                where.append(p.getX()).append(' ').append(p.getY()).append(' ').append(p.getZ());
+            }
+            player.sendMessage(new TextComponentTranslation("tracktool.msg.preclear_touched",
+                    String.valueOf(t.touchedRails.size()), where.toString()));
+        }
     }
 
     /** Pushes a finished job onto the undo stack. */

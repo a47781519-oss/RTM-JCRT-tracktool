@@ -87,6 +87,16 @@ public final class ExactRailLayer {
             //   两条轨道排除的是【同一格】⇒ 接头处必然空一格。
             //   实测：/tracktool test cell 在 (222,4,305) 报 air、离中心线 0.50 m、不在任何表里。
             BlockPos[] joints = {start.getNeighborBlockPos(), end.getNeighborBlockPos()};
+            // ★ 铺之前先把新线路路基范围里的旧底座清掉（RoadbedPreClear 的类注释有字节码依据）。
+            //   RTM 的 setRail 不会清：正好重合的那格被"接管"，旧轨道照样在；高一格/低一格的旧底座
+            //   根本不在新线的方块表里，原样留在线上 —— 列车撞到的就是这些。
+            //   放在快照之前：无主方块清掉就清掉了，不进撤销记录；别人还活着的轨道由清理器自己先记录再拆。
+            try {
+                RoadbedPreClear.clear(world, map.getRailBlockList(prop, true),
+                        java.util.Arrays.asList(joints), undo);
+            } catch (Throwable t) {
+                System.out.println("[tracktool-exact] PRE-CLEAR 异常（继续铺设）: " + t);
+            }
             if (undo != null) {
                 try {
                     // ★ 轨道方块要连 TE 快照一起存：只还原方块状态会造出"没有 railPositions
@@ -394,8 +404,11 @@ public final class ExactRailLayer {
             applyCant(segStart, segEnd, geometry, t0, t1);
             SubGeometry sub = SubGeometry.of(geometry, t0, t1, start, segStart);
             if (!place(world, segStart, segEnd, prop, sub, undo)) {
-                System.out.println("[tracktool-exact] 分段 " + i + "/" + n + " 铺设失败");
-                return out;
+                // ★ 半条线不算成功：以前这里把已铺好的前几段当结果返回，调用方就报"铺设完成"，
+                //   失败那一段 setRail 已经铺下的底座（核心没立起来）则成了无主路基。
+                //   返回空表 ⇒ 调用方按撤销记录整体回滚（前几段 + 失败段的底座都在记录里）。
+                System.out.println("[tracktool-exact] 分段 " + i + "/" + n + " 铺设失败 ⇒ 整条线按失败处理，交由调用方回滚");
+                return new java.util.ArrayList<Placed>();
             }
             out.add(new Placed(ExactRailInjector.lastCorePos,
                     ExactRailInjector.lastSamples, ExactRailInjector.lastBlockTable));

@@ -254,6 +254,14 @@ public final class PlanBuilder {
     // segments
     // ------------------------------------------------------------------
 
+    /**
+     * 相邻分段节点的最小弦长（米）。
+     *
+     * <p>{@code RailGrid.snap} 最多能把一个节点挪 0.707 m（半格格点的对角），
+     * 两端一起挪就是 1.41 m。取 3 m 才能保证落格之后两个锚点不会碰到一起
+     * （更不会前后倒置，那会让轨道倒着长回去）。 */
+    private static final double MIN_NODE_CHORD = 3.0D;
+
     private static void buildLineSegments(TrackSpec spec, RailPlan plan, Alignment al, int lineIndex,
                                           double offset, RailEnd from, Alignment base) {
         double segLen = Math.max(2.0D, TrackToolConfig.segmentLength);
@@ -309,21 +317,62 @@ public final class PlanBuilder {
             nodes[i][1] = fitted[i][1];
         }
 
-        for (int i = 0; i < count - 1; i++) {
+        // ---- 节点链去密：相邻节点太近就把中间那个并掉 ----
+        //
+        // ★ 原先这里是「{@code chordH < 0.75} 就 {@code continue}」，那是个真 bug：
+        //   跳过第 i 段之后下一轮又从 i+1 接着铺，于是钢轨链上多了一个洞——
+        //   前一根轨到 i 结束、后一根从 i+1 开始，中间那截没有任何轨道。
+        //   RTM 的列车是一根轨接一根轨往下走的，走到断口就停住——
+        //   现象恰好是「被挡住但不脱轨」（第 67 轮用户截图）。
+        //
+        //   什么时候会出现这么短的段：每个线形要素的边界都会强行插一个节点，
+        //   而 S 形解算器会把三段直线往 0 压，中间那段常常只剩下不到 1 m
+        //   （实测「左 4 m / 前 200 m」只有 0.778 m）。单向弯道永远不会，
+        //   它的要素都是几十米——所以这个洞只在 S 形上暴露。
+        //
+        //   正确做法是把过密的节点<b>并掉</b>（链不断），而不是跳过那一段。
+        //   上下游两个节点直接相连，跨过一个不到 3 m 的要素，几何误差可以忽略。
+        int[] keep = new int[count];
+        int kn = 0;
+        keep[kn++] = 0;
+        for (int i = 1; i < count - 1; i++) {
+            int prev = keep[kn - 1];
+            if (Geo.dist2(nodes[prev][0], nodes[prev][1], nodes[i][0], nodes[i][1])
+                    >= MIN_NODE_CHORD * MIN_NODE_CHORD) {
+                keep[kn++] = i;
+            }
+        }
+        // 末节点必须在链上（它就是要接上另一头的那个点）；
+        // 它要是离前一个太近，就把前一个撤掉，而不是把它丢掉。
+        int lastNode = count - 1;
+        while (kn > 1) {
+            int prev = keep[kn - 1];
+            if (Geo.dist2(nodes[prev][0], nodes[prev][1], nodes[lastNode][0], nodes[lastNode][1])
+                    >= MIN_NODE_CHORD * MIN_NODE_CHORD) {
+                break;
+            }
+            kn--;
+        }
+        keep[kn++] = lastNode;
+
+        for (int k = 0; k < kn - 1; k++) {
             if (plan.segments.size() >= MAX_SEGMENTS) {
                 plan.addError("tracktool.err.too_many_segments", String.valueOf(MAX_SEGMENTS));
                 return;
             }
+            int i = keep[k];
             double[] a = nodes[i];
-            double[] b = nodes[i + 1];
+            double[] b = nodes[keep[k + 1]];
             double chordH = Math.sqrt(Geo.dist2(a[0], a[1], b[0], b[1]));
             if (chordH < 0.75D) {
-                // Too short for RTM's Bezier length estimator; merge by skipping.
-                continue;
+                // 去密之后还能走到这里，只能是整条线本身就比一根轨还短。
+                // 宁可明确报错，也不能默默铺出一条中间带断口的轨道。
+                plan.addError("tracktool.err.segment_too_short", String.format("%.2f", chordH));
+                return;
             }
             RailPosition rp0;
             RailPosition rp1;
-            if (lineIndex == 0 && i == 0 && from != null && from.rp != null) {
+            if (lineIndex == 0 && k == 0 && from != null && from.rp != null) {
                 // First node of the selected line: reuse the selected anchor so
                 // the joint is bit-for-bit identical to the existing rail.
                 rp0 = PlanSegment.copyOf(from.rp);

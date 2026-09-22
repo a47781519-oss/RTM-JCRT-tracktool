@@ -10,7 +10,7 @@ buildscript {
 
 apply plugin: 'net.minecraftforge.gradle.forge'
 
-version = '0.1.0'
+version = '0.1.4'
 group = 'com.tracktool'
 archivesBaseName = 'tracktool'
 
@@ -81,6 +81,14 @@ task sCurveTest(type: JavaExec) {
     description = 'Check that S-curve (reverse curve) connections close on both joints'
     classpath = sourceSets.main.runtimeClasspath
     main = 'com.tracktool.rail2.SCurveSelfTest'
+}
+
+// 铺轨前清理 / 撤销后复查的去留规则（哪些旧底座清、哪些绝不能动）
+task preClearTest(type: JavaExec) {
+    group = 'verification'
+    description = 'Check which old rail base blocks the pre-lay clear and the post-undo sweep remove or keep'
+    classpath = sourceSets.main.runtimeClasspath
+    main = 'com.tracktool.rail2.RoadbedPreClearSelfTest'
 }
 
 task selfTest(type: JavaExec) {
