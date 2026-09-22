@@ -47,7 +47,19 @@ public final class SelectionManager {
 
     /** 新路径（整条线一个核心）的长度上限，超过就交回旧分段路径：
      *  一个核心 = 一个 GL 列表 + 一张方块表，太长会拖垮渲染与 setRail。 */
-    public static final double EXACT_MAX_LENGTH = 2000.0D;
+    /** Max length of a single analytic line.
+     *
+     *  <p>This used to be 2000 m, which cut users off right after 1900 m even though the
+     *  sampling still had plenty of quality left. The point count is bounded SEPARATELY by
+     *  SampledGeometry.MAX_POINTS (1024 points x 24 bytes = about 24.6 KB, i.e. the 32 KB
+     *  packet budget), so line length does NOT blow up the packet: the effective sample
+     *  spacing only grows as length / 1023.</p>
+     *
+     *  <p>Error budget: chord sagitta = step^2 / (8R). At R=300 m the spacing is
+     *  1.95 m at 2 km (1.6 mm), 3.9 m at 4 km (6.3 mm), 4.9 m at 5 km (10 mm) - all far below
+     *  what the rail model shows. Raise further only after checking the joints: shorter spacing
+     *  also keeps neighbouring cores overlapping ends identical.</p> */
+    public static final double EXACT_MAX_LENGTH = 4000.0D;
 
     public static final byte ACTION_CLEAR = 0;
     public static final byte ACTION_BACK = 1;
