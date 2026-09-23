@@ -75,7 +75,7 @@ public final class ExactRailLayer {
                                 ResourceStateRail prop, ExactRailGeometry geometry,
                                 com.tracktool.rail.RailPlacer.UndoRecord undo) {
         ExactRailMap map = new ExactRailMap(start, end, geometry);
-        BlockPos sp = new BlockPos(start.blockX, start.blockY, start.blockZ);
+        BlockPos sp = coreCellNearMid(map, prop, start, geometry);
         try {
             try {
                 map.canPlaceRail(world, true, prop);       // ★ 原生序列：先判定/清理旧轨道
@@ -396,10 +396,14 @@ public final class ExactRailLayer {
             }
             return out;
         }
+        // ★ 切点对齐到中心线穿过方块边界的地方（见 edgeAlignedCuts），不再按 total·i/n 等分
+        double[] cuts = edgeAlignedCuts(geometry, start.posX, start.posZ, total, n);
         RailPosition segStart = start;
+        double prevT0 = 0.0D;
+        BlockPos prevCore = null;
         for (int i = 0; i < n; i++) {
-            double t0 = total * i / n;
-            double t1 = total * (i + 1) / n;
+            double t0 = i == 0 ? 0.0D : cuts[i - 1];
+            double t1 = i == n - 1 ? total : cuts[i];
             RailPosition segEnd = i == n - 1 ? end : nodeAt(geometry, start, t1, true);
             applyCant(segStart, segEnd, geometry, t0, t1);
             SubGeometry sub = SubGeometry.of(geometry, t0, t1, start, segStart);
@@ -410,14 +414,233 @@ public final class ExactRailLayer {
                 System.out.println("[tracktool-exact] 分段 " + i + "/" + n + " 铺设失败 ⇒ 整条线按失败处理，交由调用方回滚");
                 return new java.util.ArrayList<Placed>();
             }
-            out.add(new Placed(ExactRailInjector.lastCorePos,
+            BlockPos thisCore = ExactRailInjector.lastCorePos;
+            out.add(new Placed(thisCore,
                     ExactRailInjector.lastSamples, ExactRailInjector.lastBlockTable));
+            if (prevCore != null && thisCore != null) {
+                int[] r = fixJointOwnership(world, geometry, start, prevT0, t0, t1, prevCore, thisCore, undo);
+                if (r[0] + r[1] + r[2] > 0) {
+                    System.out.println("[tracktool-exact] JOINT-OWNER t=" + String.format("%.2f", t0)
+                            + " 改归属 " + r[0] + " 格，补洞 " + r[1] + " 格，错侧核心 " + r[2] + " 格");
+                }
+            }
+            prevCore = thisCore;
+            prevT0 = t0;
             // 下一段的起点 RP 与本段终点同一个设计点（各自一份对象，避免两个核心共享同一个 RP）
             segStart = i == n - 1 ? end : nodeAt(geometry, start, t1, false);
         }
         System.out.println("[tracktool-exact] SEGMENTED " + n + " 段 × " + String.format("%.1f", total / n)
                 + " m（同一条几何，接头逐点一致）");
         return out;
+    }
+
+    // ------------------------------------------------------------------
+    // 接头：让列车能从一段开到下一段（第 72 轮：直线接头处卡死、抽搐、突然窜出）
+    // ------------------------------------------------------------------
+    //
+    // RTM 的转向架怎么走（EntityBogie.updateBogiePos，AppleExtended 内置版反编译）：
+    //   ① 提议点 p = 当前位置 + 速度·朝向；
+    //   ② resetRailObj(p)：取 p 所在那一列的轨道方块，看它属于哪颗核心，不同才换轨；
+    //   ③ pIndex = 当前轨道.getNearlestPoint(p) —— 取最近点，天然被夹在 [起点, 终点]。
+    // 所以只要接头外侧那一列还归「当前这段」，车就被夹回本段端点、原地不动；状态仍报 MOVE，速度照涨。
+    // 等一 tick 的位移大于那一截，p 掉进下一段的格子，就突然换轨、带着累积的速度窜出去 —— 正是用户看到的。
+    //
+    // 原生 RTM 没这个问题：RailPosition 永远在方块边上（pos = block + 0.5 + REVISION[dir]），
+    // 接头两侧的格子各归各的。我们以前按 total·i/n 等分，接头落在方块中间，包含它的那一格只能归一颗核心。
+    // 离线复现（同款逻辑的模拟）：沿 -x 的 97 m 直线要 89 km/h 才冲得过去。
+    // 三处合起来才根治（少任何一处仍有方向会卡）：切点对齐方块边 + 核心放中点 + 接头归属校正。
+
+    /**
+     * 分段切点：在等分点前后 1 m 内，找中心线穿过方块边界的位置。
+     * 任何方向上 2 m 长的线都至少跨一条整数网格线，所以总找得到；找不到（或会把某段压到 2 m 以下）就用等分点。
+     * 只改切在哪里，不改几何本身。坐标与 {@link #nodeAt} 一致：世界点 = base + geo.x(t)。
+     */
+    static double[] edgeAlignedCuts(ExactRailGeometry geo, double baseX, double baseZ, double total, int n) {
+        double[] cuts = new double[Math.max(0, n - 1)];
+        double prev = 0.0D;
+        for (int i = 1; i < n; i++) {
+            double nominal = total * i / n;
+            double best = cellEdgeCrossing(geo, baseX, baseZ, total, nominal, 1.0D);
+            if (Double.isNaN(best) || best < prev + 2.0D || best > total - 2.0D) {
+                best = nominal;
+            }
+            cuts[i - 1] = best;
+            prev = best;
+        }
+        return cuts;
+    }
+
+    private static double cellEdgeCrossing(ExactRailGeometry geo, double bx, double bz,
+                                           double total, double nominal, double radius) {
+        double step = 0.01D;
+        double best = Double.NaN;
+        double tPrev = Math.max(0.0D, nominal - radius);
+        long cPrev = cellKey(geo, bx, bz, tPrev);
+        double tEnd = Math.min(total, nominal + radius);
+        for (double t = tPrev + step; t <= tEnd + 1.0E-9D; t += step) {
+            long c = cellKey(geo, bx, bz, t);
+            if (c != cPrev) {
+                double lo = tPrev;
+                double hi = t;
+                for (int k = 0; k < 50; k++) {
+                    double mid = 0.5D * (lo + hi);
+                    if (cellKey(geo, bx, bz, mid) == cPrev) {
+                        lo = mid;
+                    } else {
+                        hi = mid;
+                    }
+                }
+                if (Double.isNaN(best) || Math.abs(hi - nominal) < Math.abs(best - nominal)) {
+                    best = hi;
+                }
+            }
+            tPrev = t;
+            cPrev = c;
+        }
+        return best;
+    }
+
+    private static long cellKey(ExactRailGeometry geo, double bx, double bz, double t) {
+        long cx = (long) Math.floor(bx + geo.x(t));
+        long cz = (long) Math.floor(bz + geo.z(t));
+        return (cx << 32) ^ (cz & 0xFFFFFFFFL);
+    }
+
+    /**
+     * 核心放在本段<b>中点</b>最近的表内格子，而不是起点 RP 那一格。
+     *
+     * <p>核心方块没法改归属（它的 getRailCore() 永远是自己），而起点 RP 那一格常常在接头的<b>另一侧</b>：
+     * 往 -x/-z 走的线，RP 格在接头后方（上一段的地盘）；第一段的起点 RP 是从既有轨道复制来的，
+     * 那一格就是<b>既有轨道的最后一格</b>（存档实证：新线第一颗核心 (293,4,921) 正好在锚点轨道 293..388 的范围内）。
+     * 车从这一段往回开，过了接头提议点仍落在本段核心那一格 ⇒ 被夹回端点。放在中点，核心永远在自己这一侧。</p>
+     */
+    private static BlockPos coreCellNearMid(ExactRailMap map, ResourceStateRail prop,
+                                            RailPosition start, ExactRailGeometry geo) {
+        BlockPos fallback = new BlockPos(start.blockX, start.blockY, start.blockZ);
+        try {
+            double half = geo.length() * 0.5D;
+            double mx = start.posX + geo.x(half);
+            double mz = start.posZ + geo.z(half);
+            int[] best = null;
+            double bestD = Double.MAX_VALUE;
+            for (int[] b : map.getRailBlockList(prop, true)) {
+                double dx = b[0] + 0.5D - mx;
+                double dz = b[2] + 0.5D - mz;
+                double d = dx * dx + dz * dz;
+                if (d < bestD) {
+                    bestD = d;
+                    best = b;
+                }
+            }
+            return best == null ? fallback : new BlockPos(best[0], best[1], best[2]);
+        } catch (Throwable t) {
+            return fallback;
+        }
+    }
+
+    /**
+     * 接头两侧 2 m 内、中心线经过的每一列：按几何归到正确的核心（接头前归前一段，之后归后一段）。
+     *
+     * <p>为什么还要这一步：RTM 的方块表只看几何采样、还要扣掉两端 RP 的邻格，而我们的 RP 是量化的载体、
+     * 几何并不经过它；再加上后铺的一段会把重叠的格子全接管过来（setRail + BASE-LINK）。
+     * 所以接头附近谁归谁，必须按几何显式定一遍。切点已对齐方块边 ⇒ 每一列只在一侧 ⇒ 归属唯一。</p>
+     *
+     * <p>只改当前归这两颗核心之一的底座（别的轨道一格不碰）；核心方块改不了就只计数。
+     * 中心线上连一块轨道方块都没有的列（以前 JOINT-FILL 管的那种洞）就补一块、归正确的一侧，并记进撤销。</p>
+     *
+     * @return {改归属格数, 补洞格数, 被错侧核心占着的列数}
+     */
+    private static int[] fixJointOwnership(World world, ExactRailGeometry geo, RailPosition lineStart,
+                                           double tA0, double tJ, double tB1,
+                                           BlockPos coreA, BlockPos coreB,
+                                           com.tracktool.rail.RailPlacer.UndoRecord undo) {
+        // 列 -> {cx, cz, side(0=A,1=B,2=两侧都有), yMin, yMax}
+        java.util.Map<Long, int[]> cols = new java.util.LinkedHashMap<Long, int[]>();
+        for (int k = 1; k <= 40; k++) {
+            double d = k * 0.05D;
+            sampleColumn(cols, geo, lineStart, tJ - d, tJ - d > tA0, 0);
+            sampleColumn(cols, geo, lineStart, tJ + d, tJ + d < tB1, 1);
+        }
+        int fixed = 0;
+        int filled = 0;
+        int blockedByCore = 0;
+        for (int[] c : cols.values()) {
+            if (c[2] == 2) {
+                continue;                           // 两侧都经过（切在边上就不会出现）：不动
+            }
+            BlockPos target = c[2] == 0 ? coreA : coreB;
+            BlockPos other = c[2] == 0 ? coreB : coreA;
+            boolean hasOurs = false;
+            boolean hasAnyRail = false;
+            for (int y = c[3] - 1; y <= c[4] + 2; y++) {
+                BlockPos p = new BlockPos(c[0], y, c[1]);
+                if (!(world.getBlockState(p).getBlock() instanceof jp.ngt.rtm.rail.BlockLargeRailBase)) {
+                    continue;
+                }
+                hasAnyRail = true;
+                TileEntity te = world.getTileEntity(p);
+                if (te instanceof TileEntityLargeRailCore) {
+                    if (p.equals(other)) {
+                        blockedByCore++;
+                    }
+                    hasOurs |= p.equals(target) || p.equals(other);
+                    continue;
+                }
+                if (!(te instanceof TileEntityLargeRailBase)) {
+                    continue;
+                }
+                int[] sp = ((TileEntityLargeRailBase) te).getStartPoint();
+                boolean ownedByTarget = sp != null && sp.length >= 3
+                        && sp[0] == target.getX() && sp[1] == target.getY() && sp[2] == target.getZ();
+                boolean ownedByOther = sp != null && sp.length >= 3
+                        && sp[0] == other.getX() && sp[1] == other.getY() && sp[2] == other.getZ();
+                if (ownedByTarget) {
+                    hasOurs = true;
+                } else if (ownedByOther) {
+                    ((TileEntityLargeRailBase) te).setStartPoint(target.getX(), target.getY(), target.getZ());
+                    hasOurs = true;
+                    fixed++;
+                }
+            }
+            if (!hasOurs && !hasAnyRail) {
+                BlockPos p = new BlockPos(c[0], c[3], c[1]);
+                net.minecraft.block.state.IBlockState st = world.getBlockState(p);
+                if (st.getBlock().isReplaceable(world, p)
+                        || st.getMaterial() == net.minecraft.block.material.Material.AIR) {
+                    if (undo != null) {
+                        undo.add(world, p, st);
+                    }
+                    BlockUtil.setBlock(world, p.getX(), p.getY(), p.getZ(), RTMRail.largeRailBase, 0, 3);
+                    TileEntity te = BlockUtil.getTileEntity(world, p.getX(), p.getY(), p.getZ());
+                    if (te instanceof TileEntityLargeRailBase) {
+                        ((TileEntityLargeRailBase) te).setStartPoint(target.getX(), target.getY(), target.getZ());
+                        filled++;
+                    }
+                }
+            }
+        }
+        return new int[]{fixed, filled, blockedByCore};
+    }
+
+    private static void sampleColumn(java.util.Map<Long, int[]> cols, ExactRailGeometry geo,
+                                     RailPosition lineStart, double t, boolean inRange, int side) {
+        if (!inRange) {
+            return;
+        }
+        int cx = (int) Math.floor(lineStart.posX + geo.x(t));
+        int cz = (int) Math.floor(lineStart.posZ + geo.z(t));
+        int y = (int) (lineStart.posY + geo.height(t));
+        long key = ((long) cx << 32) ^ (cz & 0xFFFFFFFFL);
+        int[] c = cols.get(key);
+        if (c == null) {
+            cols.put(key, new int[]{cx, cz, side, y, y});
+            return;
+        }
+        if (c[2] != side) {
+            c[2] = 2;
+        }
+        c[3] = Math.min(c[3], y);
+        c[4] = Math.max(c[4], y);
     }
 
     /**

@@ -91,6 +91,14 @@ task preClearTest(type: JavaExec) {
     main = 'com.tracktool.rail2.RoadbedPreClearSelfTest'
 }
 
+// 分段切点必须落在方块边上（否则列车会在接头处卡死）
+task jointTest(type: JavaExec) {
+    group = 'verification'
+    description = 'Check that exact-path segment joints fall on block edges (trains get stuck otherwise)'
+    classpath = sourceSets.main.runtimeClasspath
+    main = 'com.tracktool.rail2.JointAlignSelfTest'
+}
+
 task selfTest(type: JavaExec) {
     group = 'verification'
     description = 'Run rail2 offline self tests (geometry / codec / RailMap consistency)'

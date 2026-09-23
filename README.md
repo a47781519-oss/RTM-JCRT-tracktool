@@ -182,6 +182,7 @@ gradlew selfTest       # 几何 / 编解码 / RailMap 一致性
 gradlew connectTest    # 连接模式的端点闭合误差
 gradlew sCurveTest     # S 形（反向曲线）的闭合误差与曲率换向
 gradlew preClearTest   # 铺轨前清理 / 撤销后复查：哪些旧底座清、哪些绝不能动
+gradlew jointTest      # 分段接头必须落在方块边上（否则列车在接头处卡死）
 ```
 
 ## 功能
@@ -294,6 +295,7 @@ gradlew selfTest       # 几何 / 编解码 / RailMap 一致性
 gradlew connectTest    # 连接模式的端点闭合误差
 gradlew sCurveTest     # S 形（反向曲线）的闭合误差与曲率换向
 gradlew preClearTest   # 铺轨前清理 / 撤销后复查：哪些旧底座清、哪些绝不能动
+gradlew jointTest      # 分段接头必须落在方块边上（否则列车在接头处卡死）
 ```
 
 ---
