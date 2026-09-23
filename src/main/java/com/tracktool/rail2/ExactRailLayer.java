@@ -222,8 +222,13 @@ public final class ExactRailLayer {
                 if (st.getBlock() instanceof jp.ngt.rtm.rail.BlockLargeRailBase) {
                     continue;                       // 已经有轨道方块（相邻轨道铺过了）
                 }
-                if (!st.getBlock().isReplaceable(world, p) && st.getMaterial() != net.minecraft.block.material.Material.AIR) {
-                    continue;                       // 别毁坏玩家的方块
+                // 邻格的 y 是 RP 的 blockY；整数高度时轨面格在 blockY+1、方块表里已经有它 ——
+                // 这时这一列并不缺轨道，别把路基下面的土也换掉
+                if (isRailAt(world, p.up()) || isRailAt(world, p.down())) {
+                    continue;
+                }
+                if (!canReplaceForRail(world, p, st)) {
+                    continue;                       // 箱子之类带 TE 的方块、基岩：不动
                 }
                 BlockUtil.setBlock(world, p.getX(), p.getY(), p.getZ(), RTMRail.largeRailBase, 0, 3);
                 TileEntity jte = BlockUtil.getTileEntity(world, p.getX(), p.getY(), p.getZ());
@@ -233,6 +238,12 @@ public final class ExactRailLayer {
                 }
             }
             System.out.println("[tracktool-exact] JOINT-FILL 补了 " + extra.size() + " 格接头（RTM 原生会跳过两端 RP 的邻格）");
+            // ★ 中心线补洞：本段中心线经过的每一列都必须有轨道方块，否则转向架在那一列拿不到轨道 ⇒ FLY ⇒ 脱轨。
+            //   见 fillCenterline 的注释（第 74 轮：新线起点接头处三格路基缺失、列车脱轨）。
+            int holes = fillCenterline(world, start, geometry, corePos, undo, extra);
+            if (holes > 0) {
+                System.out.println("[tracktool-exact] CENTER-FILL 补了 " + holes + " 格中心线空洞");
+            }
             // ★ 采样点表：发给客户端（渲染同源）+ 写进存档（读档后服务端补注入，否则 railmap 退回贝塞尔）
             SampledGeometry samples = SampledGeometry.of(geometry);
             ExactRailInjector.lastSamples = samples;
@@ -253,6 +264,137 @@ public final class ExactRailLayer {
             System.out.println("[tracktool-exact] place 抛异常: " + t); t.printStackTrace();
             return false;
         }
+    }
+
+    /**
+     * 这一格能不能换成轨道底座 —— 与 RTM 自己的 {@code RailMap.setRail} 同一标准：
+     * 除了别的轨道方块，什么都换（土、草、花、水、岩浆……）。另外只保护两样：
+     * 带 TileEntity 的方块（箱子等，换掉就丢东西）和不可破坏的方块（基岩）。
+     *
+     * <p>以前 JOINT-FILL 只肯填空气和「可替换」方块（注释写着"别毁坏玩家的方块"）。
+     * 可方块表里的格子 RTM 早就照换不误，唯独接头这一格留着 —— 地面上的花、草、土都不算可替换，
+     * 于是正好在接头处留下一个没有轨道的洞（第 74 轮：截图里缺路基的地方还长着花）。
+     * 超平坦测试世界的轨面那一层恰好是空气，所以一直没暴露。</p>
+     */
+    static boolean canReplaceForRail(World world, BlockPos p, net.minecraft.block.state.IBlockState st) {
+        if (st.getBlock() instanceof jp.ngt.rtm.rail.BlockLargeRailBase) {
+            return false;
+        }
+        if (st.getBlock().hasTileEntity(st)) {
+            return false;
+        }
+        try {
+            if (st.getBlockHardness(world, p) < 0.0F) {
+                return false;
+            }
+        } catch (Throwable ignored) {
+            // 取不到硬度就按普通方块处理
+        }
+        return true;
+    }
+
+    private static boolean isRailAt(World world, BlockPos p) {
+        return p.getY() >= 0 && p.getY() <= 255
+                && world.getBlockState(p).getBlock() instanceof jp.ngt.rtm.rail.BlockLargeRailBase;
+    }
+
+    /**
+     * 中心线补洞：沿本段几何每 0.1 m 取一点，它所在那一列在轨面层 ±1 内必须有轨道方块；
+     * 没有就在轨面层补一块底座、归本段核心、记进撤销，并加进发给客户端的方块表（路基照常画出来）。
+     *
+     * <p>为什么会有洞：RTM 的方块表会扣掉两端 RP 的「邻格」（原生设计：留给接在这里的另一条轨道）。
+     * 我们的起点 RP 是从既有轨道端点<b>原样复制</b>的、朝向也一样，所以它的邻格正是<b>我们自己的第一格</b>；
+     * 分段之间两个 RP 同点同向，也扣的是同一格。只要轨面高度不是整数（有坡度、超高时几乎总是），
+     * 这一格就不在任何一张表里。转向架提议点落进这一列 ⇒ {@code getRailFromCoordinates} 从上往下
+     * 找不到任何轨道方块 ⇒ {@code resetRailObj} 返回 false ⇒ {@code MotionState.FLY} ⇒ 脱轨。</p>
+     *
+     * <p>采样避开两个端点各 0.05 m：切点对齐在方块边上，端点本身落在哪一列取决于 floor 的方向，
+     * 可能是隔壁那一段的格子。</p>
+     *
+     * @return 补了几格
+     */
+    static int fillCenterline(World world, RailPosition start, ExactRailGeometry geo, BlockPos corePos,
+                              com.tracktool.rail.RailPlacer.UndoRecord undo, java.util.List<int[]> extra) {
+        double len = geo.length();
+        if (len <= 0.2D) {
+            return 0;
+        }
+        java.util.Set<Long> seen = new java.util.HashSet<Long>();
+        int filled = 0;
+        for (double s = 0.05D; s <= len - 0.05D + 1.0E-9D; s += 0.1D) {
+            int cx = (int) Math.floor(start.posX + geo.x(s));
+            int cz = (int) Math.floor(start.posZ + geo.z(s));
+            int cy = (int) (start.posY + geo.height(s));
+            long key = ((long) cx << 32) ^ (cz & 0xFFFFFFFFL);
+            if (!seen.add(key)) {
+                continue;
+            }
+            BlockPos p = new BlockPos(cx, cy, cz);
+            if (isRailAt(world, p) || isRailAt(world, p.up()) || isRailAt(world, p.down())) {
+                continue;
+            }
+            net.minecraft.block.state.IBlockState st = world.getBlockState(p);
+            if (!canReplaceForRail(world, p, st)) {
+                continue;
+            }
+            if (undo != null) {
+                undo.add(world, p, st);
+            }
+            BlockUtil.setBlock(world, cx, cy, cz, RTMRail.largeRailBase, 0, 3);
+            TileEntity te = BlockUtil.getTileEntity(world, cx, cy, cz);
+            if (te instanceof TileEntityLargeRailBase) {
+                ((TileEntityLargeRailBase) te).setStartPoint(corePos.getX(), corePos.getY(), corePos.getZ());
+                if (extra != null) {
+                    extra.add(new int[]{cx, cy, cz});
+                }
+                filled++;
+            }
+        }
+        return filled;
+    }
+
+    /**
+     * 读档补发时用：把中心线上<b>归这颗核心</b>、但不在 RTM 方块表里的轨道方块并进表
+     * （也就是 {@link #fillCenterline} 补的那些），否则重进游戏后这几格不画路基。
+     */
+    public static int[][] withCenterlineCells(World world, jp.ngt.rtm.rail.util.RailMap rm, BlockPos corePos,
+                                              int[][] table) {
+        if (world == null || rm == null || corePos == null) {
+            return table;
+        }
+        java.util.List<int[]> extra = new java.util.ArrayList<int[]>();
+        try {
+            java.util.Set<Long> have = new java.util.HashSet<Long>();
+            if (table != null) {
+                for (int[] b : table) {
+                    have.add(new BlockPos(b[0], b[1], b[2]).toLong());
+                }
+            }
+            int split = Math.max(2, (int) (rm.getLength() * 10.0D));
+            for (int i = 1; i < split; i++) {
+                double[] zx = rm.getRailPos(split, i);
+                int cx = (int) Math.floor(zx[1]);
+                int cz = (int) Math.floor(zx[0]);
+                int cy = (int) rm.getRailHeight(split, i);
+                for (int dy = -1; dy <= 1; dy++) {
+                    BlockPos p = new BlockPos(cx, cy + dy, cz);
+                    if (!world.isBlockLoaded(p) || !have.add(p.toLong())) {
+                        continue;
+                    }
+                    TileEntity te = world.getTileEntity(p);
+                    if (te instanceof TileEntityLargeRailBase && !(te instanceof TileEntityLargeRailCore)) {
+                        int[] sp = ((TileEntityLargeRailBase) te).getStartPoint();
+                        if (sp != null && sp.length >= 3 && sp[0] == corePos.getX()
+                                && sp[1] == corePos.getY() && sp[2] == corePos.getZ()) {
+                            extra.add(new int[]{cx, cy + dy, cz});
+                        }
+                    }
+                }
+            }
+        } catch (Throwable ignored) {
+            // 表照原样
+        }
+        return withExtra(table, extra);
     }
 
     /** 读档补发时用：把两端 RP 的邻格（若世界里确实是轨道方块）并进方块表，
@@ -623,8 +765,7 @@ public final class ExactRailLayer {
             if (!hasOurs && !hasAnyRail) {
                 BlockPos p = new BlockPos(c[0], c[3], c[1]);
                 net.minecraft.block.state.IBlockState st = world.getBlockState(p);
-                if (st.getBlock().isReplaceable(world, p)
-                        || st.getMaterial() == net.minecraft.block.material.Material.AIR) {
+                if (canReplaceForRail(world, p, st)) {
                     if (undo != null) {
                         undo.add(world, p, st);
                     }
