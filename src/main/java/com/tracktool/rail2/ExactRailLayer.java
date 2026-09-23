@@ -266,6 +266,217 @@ public final class ExactRailLayer {
         }
     }
 
+    // ------------------------------------------------------------------
+    // 路基全宽（第 75 轮：/tracktool test audit 报中心线 0 空洞，但接头处横着缺一道路基）
+    // ------------------------------------------------------------------
+    //
+    // RTM 的方块表（createRailList）每 0.25 m 采样一次，中心线 + 两侧 i+0.25 m（i = 0..ballastWidth/2），
+    // 而且<b>跳过首尾各一个采样</b>。接头两侧于是有一条约 0.75 m 宽、垂直于线路的带子，两段都不采样。
+    // 斜向线路上，两侧那几条线只擦过某些方块的一个角 —— 整段擦痕落在这条带子里的方块就没有路基：
+    // 接头处一道横穿线路的斜缺口，从缺口能看到下面的地形（第 75 轮截图）。正南北/东西的线擦痕都是整 1 m，
+    // 所以从来不缺（这也是以前直线测试没暴露的原因）。中心线补洞只管中间那条线，所以 audit 报 0。
+    //
+    // 离线复现（tools/ballast_sim.py）：120 m 斜线每条缺 3–22 格；逐段各补各的仍缺 0–4 格
+    // （方块中心在隔壁段、却只被本段的线擦到）；整条线一遍、用精确的格子遍历 —— 所有角度都是 0。
+
+    /** RTM 方块表用的横向偏移：中心线 + 两侧 i+0.25（i = 0..ballastWidth/2），与 createRailList 一致。 */
+    public static double[] ballastOffsets(ResourceStateRail prop) {
+        int hw = 1;
+        try {
+            hw = ((jp.ngt.rtm.modelpack.modelset.ModelSetRail) prop.getResourceSet()).getConfig().ballastWidth >> 1;
+        } catch (Throwable ignored) {
+            // 取不到就按常见的 3 宽
+        }
+        hw = Math.max(0, Math.min(8, hw));
+        double[] out = new double[1 + 2 * (hw + 1)];
+        int k = 0;
+        out[k++] = 0.0D;
+        for (int i = 0; i <= hw; i++) {
+            out[k++] = i + 0.25D;
+            out[k++] = -(i + 0.25D);
+        }
+        return out;
+    }
+
+    private static long cellKey(int x, int z) {
+        return ((long) x << 32) ^ (z & 0xFFFFFFFFL);
+    }
+
+    /** 线段经过的每一个方块（supercover DDA；恰好穿过角点时两侧方块都算）。 */
+    static void segmentCells(double x0, double z0, double x1, double z1, java.util.Set<Long> out) {
+        int cx = (int) Math.floor(x0);
+        int cz = (int) Math.floor(z0);
+        int ex = (int) Math.floor(x1);
+        int ez = (int) Math.floor(z1);
+        out.add(cellKey(cx, cz));
+        double dx = x1 - x0;
+        double dz = z1 - z0;
+        int sx = dx > 0.0D ? 1 : -1;
+        int sz = dz > 0.0D ? 1 : -1;
+        double tdx = dx != 0.0D ? Math.abs(1.0D / dx) : Double.POSITIVE_INFINITY;
+        double tdz = dz != 0.0D ? Math.abs(1.0D / dz) : Double.POSITIVE_INFINITY;
+        double tmx = dx != 0.0D ? ((cx + (dx > 0.0D ? 1 : 0)) - x0) / dx : Double.POSITIVE_INFINITY;
+        double tmz = dz != 0.0D ? ((cz + (dz > 0.0D ? 1 : 0)) - z0) / dz : Double.POSITIVE_INFINITY;
+        for (int guard = 0; guard < 64 && (cx != ex || cz != ez); guard++) {
+            if (tmx < tmz) {
+                tmx += tdx;
+                cx += sx;
+            } else if (tmz < tmx) {
+                tmz += tdz;
+                cz += sz;
+            } else {
+                out.add(cellKey(cx + sx, cz));
+                out.add(cellKey(cx, cz + sz));
+                tmx += tdx;
+                tmz += tdz;
+                cx += sx;
+                cz += sz;
+            }
+            out.add(cellKey(cx, cz));
+        }
+        out.add(cellKey(ex, ez));
+    }
+
+    /**
+     * 一条折线（中心线采样点）的路基占地：中心线和两侧每条偏移线经过的每一个方块 → 该处轨面层 y。
+     * 横向方向用相邻采样点的切线求，不依赖 yaw 的约定。
+     */
+    public static java.util.Map<Long, Integer> footprintOf(double[] xs, double[] zs, double[] ys, double[] offsets) {
+        java.util.Map<Long, Integer> cells = new java.util.LinkedHashMap<Long, Integer>();
+        int n = xs.length;
+        if (n < 2) {
+            return cells;
+        }
+        java.util.Set<Long> seg = new java.util.LinkedHashSet<Long>();
+        for (double o : offsets) {
+            double px = 0.0D;
+            double pz = 0.0D;
+            for (int k = 0; k < n; k++) {
+                int a = Math.max(0, k - 1);
+                int b = Math.min(n - 1, k + 1);
+                double tx = xs[b] - xs[a];
+                double tz = zs[b] - zs[a];
+                double tl = Math.sqrt(tx * tx + tz * tz);
+                if (tl < 1.0E-9D) {
+                    tx = 1.0D;
+                    tz = 0.0D;
+                    tl = 1.0D;
+                }
+                double x = xs[k] + (-tz / tl) * o;
+                double z = zs[k] + (tx / tl) * o;
+                if (k > 0) {
+                    seg.clear();
+                    segmentCells(px, pz, x, z, seg);
+                    int y = (int) ys[k - 1];
+                    for (Long c : seg) {
+                        if (!cells.containsKey(c)) {
+                            cells.put(c, y);
+                        }
+                    }
+                }
+                px = x;
+                pz = z;
+            }
+        }
+        return cells;
+    }
+
+    /** RailMap 版本：按 0.25 m 取中心线点（RTM 的 getRailPos 返回 [z, x]）。 */
+    public static java.util.Map<Long, Integer> footprintOf(jp.ngt.rtm.rail.util.RailMap rm, double[] offsets) {
+        int split = Math.max(2, (int) Math.ceil(rm.getLength() * 4.0D));
+        double[] xs = new double[split + 1];
+        double[] zs = new double[split + 1];
+        double[] ys = new double[split + 1];
+        for (int i = 0; i <= split; i++) {
+            double[] zx = rm.getRailPos(split, i);
+            xs[i] = zx[1];
+            zs[i] = zx[0];
+            ys[i] = rm.getRailHeight(split, i);
+        }
+        return footprintOf(xs, zs, ys, offsets);
+    }
+
+    /**
+     * 整条线铺完之后补全路基宽度：占地里每一格，在轨面层 ±1 内没有轨道方块就补一块底座。
+     * 归属按「方块中心离哪一段最近」（几何上的最近点落在哪段的里程区间）；侧面的格子归谁不影响行车
+     * （转向架只看中心线那一列），中心线那几列早已有轨道、这里不会再动它们。
+     * 补的格子记进撤销，并追加到对应那一段发给客户端的方块表里（路基照常画出来）。
+     */
+    static void fillBallastAndPatchTables(World world, ExactRailGeometry geo, RailPosition lineStart,
+                                          double[] bounds, ResourceStateRail prop,
+                                          com.tracktool.rail.RailPlacer.UndoRecord undo, java.util.List<Placed> out) {
+        try {
+            int pieces = out.size();
+            if (pieces == 0 || bounds.length != pieces + 1) {
+                return;
+            }
+            double total = geo.length();
+            int n = Math.max(2, (int) Math.ceil(total / 0.25D));
+            double[] xs = new double[n + 1];
+            double[] zs = new double[n + 1];
+            double[] ys = new double[n + 1];
+            for (int k = 0; k <= n; k++) {
+                double t = total * k / n;
+                xs[k] = lineStart.posX + geo.x(t);
+                zs[k] = lineStart.posZ + geo.z(t);
+                ys[k] = lineStart.posY + geo.height(t);
+            }
+            java.util.Map<Long, Integer> cells = footprintOf(xs, zs, ys, ballastOffsets(prop));
+            java.util.List<java.util.List<int[]>> extras = new java.util.ArrayList<java.util.List<int[]>>();
+            for (int i = 0; i < pieces; i++) {
+                extras.add(new java.util.ArrayList<int[]>());
+            }
+            int filled = 0;
+            for (java.util.Map.Entry<Long, Integer> e : cells.entrySet()) {
+                int cx = (int) (e.getKey() >> 32);
+                int cz = (int) e.getKey().longValue();
+                int cy = e.getValue();
+                BlockPos p = new BlockPos(cx, cy, cz);
+                if (cy < 0 || cy > 255 || !world.isBlockLoaded(p)) {
+                    continue;
+                }
+                if (isRailAt(world, p) || isRailAt(world, p.up()) || isRailAt(world, p.down())) {
+                    continue;
+                }
+                net.minecraft.block.state.IBlockState st = world.getBlockState(p);
+                if (!canReplaceForRail(world, p, st)) {
+                    continue;
+                }
+                double t = geo.nearestT(cx + 0.5D - lineStart.posX, cz + 0.5D - lineStart.posZ);
+                int piece = 0;
+                while (piece < pieces - 1 && t > bounds[piece + 1]) {
+                    piece++;
+                }
+                BlockPos core = out.get(piece).corePos;
+                if (core == null) {
+                    continue;
+                }
+                if (undo != null) {
+                    undo.add(world, p, st);
+                }
+                BlockUtil.setBlock(world, cx, cy, cz, RTMRail.largeRailBase, 0, 3);
+                TileEntity te = BlockUtil.getTileEntity(world, cx, cy, cz);
+                if (te instanceof TileEntityLargeRailBase) {
+                    ((TileEntityLargeRailBase) te).setStartPoint(core.getX(), core.getY(), core.getZ());
+                    extras.get(piece).add(new int[]{cx, cy, cz});
+                    filled++;
+                }
+            }
+            if (filled > 0) {
+                for (int i = 0; i < pieces; i++) {
+                    if (!extras.get(i).isEmpty()) {
+                        Placed pl = out.get(i);
+                        out.set(i, new Placed(pl.corePos, pl.samples, withExtra(pl.blocks, extras.get(i))));
+                    }
+                }
+                System.out.println("[tracktool-exact] BALLAST-FILL 补了 " + filled + " 格路基（整条线全宽，占地 "
+                        + cells.size() + " 格）");
+            }
+        } catch (Throwable t) {
+            System.out.println("[tracktool-exact] BALLAST-FILL 异常（不影响已铺轨道）: " + t);
+        }
+    }
+
     /**
      * 这一格能不能换成轨道底座 —— 与 RTM 自己的 {@code RailMap.setRail} 同一标准：
      * 除了别的轨道方块，什么都换（土、草、花、水、岩浆……）。另外只保护两样：
@@ -354,11 +565,12 @@ public final class ExactRailLayer {
     }
 
     /**
-     * 读档补发时用：把中心线上<b>归这颗核心</b>、但不在 RTM 方块表里的轨道方块并进表
-     * （也就是 {@link #fillCenterline} 补的那些），否则重进游戏后这几格不画路基。
+     * 读档补发时用：把这颗核心路基占地（中心线 + 两侧，见 {@link #footprintOf}）里<b>归它</b>、
+     * 但不在 RTM 方块表里的轨道方块并进表（中心线补洞、路基全宽补格补上的那些），
+     * 否则重进游戏后这几格不画路基。
      */
-    public static int[][] withCenterlineCells(World world, jp.ngt.rtm.rail.util.RailMap rm, BlockPos corePos,
-                                              int[][] table) {
+    public static int[][] withFootprintCells(World world, jp.ngt.rtm.rail.util.RailMap rm, BlockPos corePos,
+                                             ResourceStateRail prop, int[][] table) {
         if (world == null || rm == null || corePos == null) {
             return table;
         }
@@ -370,12 +582,10 @@ public final class ExactRailLayer {
                     have.add(new BlockPos(b[0], b[1], b[2]).toLong());
                 }
             }
-            int split = Math.max(2, (int) (rm.getLength() * 10.0D));
-            for (int i = 1; i < split; i++) {
-                double[] zx = rm.getRailPos(split, i);
-                int cx = (int) Math.floor(zx[1]);
-                int cz = (int) Math.floor(zx[0]);
-                int cy = (int) rm.getRailHeight(split, i);
+            for (java.util.Map.Entry<Long, Integer> e : footprintOf(rm, ballastOffsets(prop)).entrySet()) {
+                int cx = (int) (e.getKey() >> 32);
+                int cz = (int) e.getKey().longValue();
+                int cy = e.getValue();
                 for (int dy = -1; dy <= 1; dy++) {
                     BlockPos p = new BlockPos(cx, cy + dy, cz);
                     if (!world.isBlockLoaded(p) || !have.add(p.toLong())) {
@@ -539,6 +749,7 @@ public final class ExactRailLayer {
             if (place(world, start, end, prop, geometry, undo)) {
                 out.add(new Placed(ExactRailInjector.lastCorePos,
                         ExactRailInjector.lastSamples, ExactRailInjector.lastBlockTable));
+                fillBallastAndPatchTables(world, geometry, start, new double[]{0.0D, total}, prop, undo, out);
             }
             return out;
         }
@@ -577,6 +788,13 @@ public final class ExactRailLayer {
         }
         System.out.println("[tracktool-exact] SEGMENTED " + n + " 段 × " + String.format("%.1f", total / n)
                 + " m（同一条几何，接头逐点一致）");
+        double[] bounds = new double[n + 1];
+        bounds[0] = 0.0D;
+        for (int i = 1; i < n; i++) {
+            bounds[i] = cuts[i - 1];
+        }
+        bounds[n] = total;
+        fillBallastAndPatchTables(world, geometry, start, bounds, prop, undo, out);
         return out;
     }
 

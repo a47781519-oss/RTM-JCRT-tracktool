@@ -441,12 +441,58 @@ public final class TestHarness {
                 }
             }
         }
-        String head = String.format("[audit] 半径 %d 内 %d 颗核心、%d 列中心线：空洞 %d 列%s",
-                radius, cores.size(), columns, holes, noMap > 0 ? "（另有 " + noMap + " 颗核心取不到 RailMap）" : "");
-        player.sendMessage(new TextComponentString((holes == 0 ? TextFormatting.GREEN : TextFormatting.RED) + head));
+        // 路基全宽：占地里（中心线 + 两侧偏移线经过的每一格）轨面层 ±1 内没有轨道方块的格子
+        int ballastCells = 0;
+        int ballastMissing = 0;
+        java.util.Set<Long> seenGap = new java.util.HashSet<Long>();
+        for (TileEntityLargeRailCore core : cores) {
+            jp.ngt.rtm.rail.util.RailMap[] maps;
+            try {
+                maps = core.getAllRailMaps();
+            } catch (Throwable t) {
+                maps = null;
+            }
+            if (maps == null) {
+                continue;
+            }
+            double[] offs = com.tracktool.rail2.ExactRailLayer.ballastOffsets(core.getResourceState());
+            for (jp.ngt.rtm.rail.util.RailMap rm : maps) {
+                if (rm == null) {
+                    continue;
+                }
+                for (java.util.Map.Entry<Long, Integer> e
+                        : com.tracktool.rail2.ExactRailLayer.footprintOf(rm, offs).entrySet()) {
+                    int cx = (int) (e.getKey() >> 32);
+                    int cz = (int) e.getKey().longValue();
+                    int cy = e.getValue();
+                    BlockPos p = new BlockPos(cx, cy, cz);
+                    if (!world.isBlockLoaded(p)) {
+                        continue;
+                    }
+                    ballastCells++;
+                    boolean ok = false;
+                    for (int dy = -1; dy <= 1 && !ok; dy++) {
+                        ok = world.getBlockState(p.add(0, dy, 0)).getBlock() instanceof BlockLargeRailBase;
+                    }
+                    if (ok || !seenGap.add(p.toLong())) {
+                        continue;
+                    }
+                    ballastMissing++;
+                    if (ballastMissing <= 40) {
+                        lines.add(String.format("路基缺格 (%d,%d,%d) 现在是 %s ｜ 所属核心 %s",
+                                cx, cy, cz, world.getBlockState(p).getBlock().getRegistryName(), core.getPos()));
+                    }
+                }
+            }
+        }
+        String head = String.format("[audit] 半径 %d 内 %d 颗核心：中心线 %d 列空洞 %d；路基占地 %d 格缺 %d%s",
+                radius, cores.size(), columns, holes, ballastCells, ballastMissing,
+                noMap > 0 ? "（另有 " + noMap + " 颗核心取不到 RailMap）" : "");
+        player.sendMessage(new TextComponentString((holes == 0 && ballastMissing == 0
+                ? TextFormatting.GREEN : TextFormatting.RED) + head));
         com.tracktool.TrackToolCore.warn("%s", head);
         for (int i = 0; i < lines.size(); i++) {
-            com.tracktool.TrackToolCore.warn("[audit] 空洞 %s", lines.get(i));
+            com.tracktool.TrackToolCore.warn("[audit] %s", lines.get(i));
             if (i < 8) {
                 player.sendMessage(new TextComponentString(TextFormatting.YELLOW + "  " + lines.get(i)));
             }

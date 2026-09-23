@@ -160,6 +160,66 @@ public final class JointAlignSelfTest {
         }
     }
 
+    private static int footprintChecks;
+
+    /**
+     * 路基占地（{@link ExactRailLayer#footprintOf}）：按 0.25 m 的折线 + 精确格子遍历，
+     * 必须覆盖「中心线和两侧偏移线以 5 mm 步长密采样」碰到的每一格，而且不能伸到路基宽度 + 1 格以外。
+     */
+    private static void checkFootprint(double yawDeg, double startX, double startZ, double len, int halfWidth) {
+        double[] offs = new double[1 + 2 * (halfWidth + 1)];
+        int k = 0;
+        offs[k++] = 0.0D;
+        for (int i = 0; i <= halfWidth; i++) {
+            offs[k++] = i + 0.25D;
+            offs[k++] = -(i + 0.25D);
+        }
+        double dx = Math.sin(Math.toRadians(yawDeg));
+        double dz = Math.cos(Math.toRadians(yawDeg));
+        int n = (int) Math.ceil(len / 0.25D);
+        double[] xs = new double[n + 1];
+        double[] zs = new double[n + 1];
+        double[] ys = new double[n + 1];
+        for (int i = 0; i <= n; i++) {
+            double s = len * i / n;
+            xs[i] = startX + dx * s;
+            zs[i] = startZ + dz * s;
+            ys[i] = 64.0D;
+        }
+        java.util.Map<Long, Integer> fp = ExactRailLayer.footprintOf(xs, zs, ys, offs);
+        footprintChecks++;
+        int missing = 0;
+        long firstMissing = 0L;
+        for (double o : offs) {
+            for (double s = 0.0D; s <= len + 1e-9; s += 0.005D) {
+                double x = startX + dx * s - dz * o;
+                double z = startZ + dz * s + dx * o;
+                long key = ((long) (int) Math.floor(x) << 32) ^ (((int) Math.floor(z)) & 0xFFFFFFFFL);
+                if (!fp.containsKey(key)) {
+                    if (missing == 0) {
+                        firstMissing = key;
+                    }
+                    missing++;
+                }
+            }
+        }
+        if (missing > 0) {
+            fail(String.format("路基占地 yaw=%.0f hw=%d 漏了密采样碰到的格子（首个 %d,%d）", yawDeg, halfWidth,
+                    (int) (firstMissing >> 32), (int) firstMissing));
+        }
+        double maxOff = halfWidth + 0.25D + 1.5D;       // 最外一条线 + 一格对角
+        for (Long key : fp.keySet()) {
+            double cx = (int) (key >> 32) + 0.5D - startX;
+            double cz = (int) key.longValue() + 0.5D - startZ;
+            double along = cx * dx + cz * dz;
+            double across = Math.abs(-cx * dz + cz * dx);
+            if (across > maxOff || along < -1.5D || along > len + 1.5D) {
+                fail(String.format("路基占地 yaw=%.0f hw=%d 多出一格离中心线 %.2f m（路基宽度外）", yawDeg, halfWidth, across));
+                break;
+            }
+        }
+    }
+
     private static void fail(String msg) {
         failures++;
         if (failures <= 20) {
@@ -199,8 +259,15 @@ public final class JointAlignSelfTest {
             }
         }
 
+        for (int hw = 1; hw <= 2; hw++) {
+            for (int yaw = 0; yaw < 360; yaw += 7) {
+                checkFootprint(yaw, 100.3D, 50.7D, 60.0D, hw);
+            }
+        }
+
         System.out.println(failures == 0
-                ? "[jointTest] " + joints + " 个接头全部落在方块边上，两侧无共用列；" + coreChecks
+                ? "[jointTest] " + footprintChecks + " 条路基占地无漏格、无越界；"
+                        + joints + " 个接头全部落在方块边上，两侧无共用列；" + coreChecks
                         + " 个核心格 Y 均等于起点 blockY、不浮在钢轨上 —— 通过"
                 : "[jointTest] " + failures + " 项失败（共 " + joints + " 个接头）");
         if (failures > 0) {

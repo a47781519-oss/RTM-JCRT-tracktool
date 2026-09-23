@@ -166,8 +166,8 @@ public final class ExactRailServerSync {
             }
             int[][] table = ExactRailLayer.withJointCells(world,
                     rm, ExactRailLayer.blockTable(rm, core.getResourceState()));
-            // 中心线补洞补上的那几格不在 RTM 的方块表里，要并进来，重进游戏后路基才画得出来
-            table = ExactRailLayer.withCenterlineCells(world, rm, core.getPos(), table);
+            // 中心线补洞 / 路基全宽补格补上的那些格不在 RTM 的方块表里，要并进来，重进游戏后路基才画得出来
+            table = ExactRailLayer.withFootprintCells(world, rm, core.getPos(), core.getResourceState(), table);
             return ExactRailLayer.snapTableToWorld(world, table);
         } catch (Throwable t) {
             System.out.println("[tracktool-exact] RESYNC 方块表重算失败: " + t);
