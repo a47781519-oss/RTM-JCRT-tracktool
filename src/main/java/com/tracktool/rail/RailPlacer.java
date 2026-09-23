@@ -49,7 +49,7 @@ public final class RailPlacer {
         for (PlanSegmentView v : segments) {
             RailMapBasic rm;
             try {
-                rm = new RailMapBasic(v.start, v.end);
+                rm = RailMaps.basic(v.start, v.end);
             } catch (Throwable t) {
                 return "tracktool.err.geometry";
             }
@@ -80,7 +80,7 @@ public final class RailPlacer {
                                 boolean creative, UndoRecord undo) {
         RailMapBasic railMap;
         try {
-            railMap = new RailMapBasic(start, end);
+            railMap = RailMaps.basic(start, end);
         } catch (Throwable t) {
             TrackToolCoreHolder.log("RailMapBasic failed", t);
             return false;
@@ -237,7 +237,7 @@ public final class RailPlacer {
      */
     public static void breakCore(World world, RailPosition start, RailPosition end, ResourceStateRail prop) {
         try {
-            RailMapBasic rm = new RailMapBasic(start, end);
+            RailMapBasic rm = RailMaps.basic(start, end);
             TileEntity tile = BlockUtil.getTileEntity(world, start.blockX, start.blockY, start.blockZ);
             if (tile instanceof TileEntityLargeRailCore) {
                 ((TileEntityLargeRailCore) tile).getRailMap(null);

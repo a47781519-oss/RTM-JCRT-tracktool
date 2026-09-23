@@ -75,7 +75,7 @@ public final class ExactRailLayer {
                                 ResourceStateRail prop, ExactRailGeometry geometry,
                                 com.tracktool.rail.RailPlacer.UndoRecord undo) {
         ExactRailMap map = new ExactRailMap(start, end, geometry);
-        BlockPos sp = coreCellNearMid(map, prop, start, geometry);
+        BlockPos sp = coreCell(start, geometry);
         try {
             try {
                 map.canPlaceRail(world, true, prop);       // ★ 原生序列：先判定/清理旧轨道
@@ -129,6 +129,10 @@ public final class ExactRailLayer {
             //    moveX = stPoint - (startPoint + 0.5 + REVISION) 再叠加 TE 自身的渲染位移，两者相消
             //    ⇒ 核心挪到旁边一格不影响外观；唯一的硬约束是【setRail 必须用同一坐标】（底座 startPoint 由它写）。
             BlockPos corePos = pickCorePos(world, sp);
+            if (corePos != null && undo != null) {
+                // 核心那一格可能不在方块表里（比如在轨道格正下方），不记的话撤销后那里会留个洞
+                undo.add(world, corePos, world.getBlockState(corePos));
+            }
             if (corePos == null) {
                 System.out.println("[tracktool-exact] CORE-POS-NONE 周围全是别的轨道核心 " + sp);
                 return false;
@@ -507,35 +511,49 @@ public final class ExactRailLayer {
     }
 
     /**
-     * 核心放在本段<b>中点</b>最近的表内格子，而不是起点 RP 那一格。
+     * 核心放哪一格。两个约束<b>必须同时满足</b>：
      *
-     * <p>核心方块没法改归属（它的 getRailCore() 永远是自己），而起点 RP 那一格常常在接头的<b>另一侧</b>：
-     * 往 -x/-z 走的线，RP 格在接头后方（上一段的地盘）；第一段的起点 RP 是从既有轨道复制来的，
-     * 那一格就是<b>既有轨道的最后一格</b>（存档实证：新线第一颗核心 (293,4,921) 正好在锚点轨道 293..388 的范围内）。
-     * 车从这一段往回开，过了接头提议点仍落在本段核心那一格 ⇒ 被夹回端点。放在中点，核心永远在自己这一侧。</p>
+     * <ol>
+     *   <li><b>Y 必须等于起点 RP 的 blockY。</b>RTM 画钢轨模型（{@code RailPartsRendererBase}
+     *       的 {@code createRailPos} + 绘制时的 {@code glTranslatef}）时，X/Z 用 TE 坐标与
+     *       {@code startPoint} 相消，而 Y 只加了 {@code rp.posY - rp.blockY}、<b>没有减掉核心的 Y</b>
+     *       —— 画出来的钢轨高度 = 设计高度 + (核心.y − 起点RP.blockY)。原生 RTM 的核心永远在起点 RP
+     *       那一格，所以这一项恒为 0。第 72 轮把核心挪到「本段中点的路基格」之后，这一项在平地上
+     *       通常是 +1（RP 把 73.0 存成 blockY=72、height=15，而路基格在 73），整段钢轨画高一格；
+     *       坡道上一段 0、一段 1 —— 从斜上方看就是钢轨和路基错开（第 73 轮服务器截图两张）。
+     *       路基是按绝对坐标画的（{@code RenderRailBlock} 平移量完全相消），所以只有钢轨漂了；
+     *       列车走的是 RailMap 不是渲染，所以只是「看着」错。</li>
+     *   <li><b>X/Z 必须在本段自己这一侧</b>（见上面「接头」一节）：核心方块改不了归属，
+     *       起点 RP 那一格对 -x/-z 方向的线、以及第一段（既有轨道的最后一格）都在接头另一侧。</li>
+     * </ol>
+     *
+     * <p>做法：沿中心线从 1 m 处往后找第一个「那一列的轨道格 y ∈ {blockY, blockY+1}」的列，
+     * 核心放在该列、Y = blockY —— 轨道格正好在 blockY 就替换它；高一格则核心在它正下方，
+     * 与原生 RTM 在整数高度时的位置一样，绝不会浮在钢轨上面。
+     * 找不到（很陡的下坡）就退回起点 RP 那一格：原生位置，渲染一定对。</p>
      */
-    private static BlockPos coreCellNearMid(ExactRailMap map, ResourceStateRail prop,
-                                            RailPosition start, ExactRailGeometry geo) {
-        BlockPos fallback = new BlockPos(start.blockX, start.blockY, start.blockZ);
+    private static BlockPos coreCell(RailPosition start, ExactRailGeometry geo) {
+        int[] c = coreCellAt(start.blockX, start.blockY, start.blockZ, start.posX, start.posY, start.posZ, geo);
+        return new BlockPos(c[0], c[1], c[2]);
+    }
+
+    /** 纯数值版本（离线自检 {@code JointAlignSelfTest} 直接调它，不必构造 RailPosition）。 */
+    static int[] coreCellAt(int blockX, int blockY, int blockZ, double posX, double posY, double posZ,
+                            ExactRailGeometry geo) {
         try {
-            double half = geo.length() * 0.5D;
-            double mx = start.posX + geo.x(half);
-            double mz = start.posZ + geo.z(half);
-            int[] best = null;
-            double bestD = Double.MAX_VALUE;
-            for (int[] b : map.getRailBlockList(prop, true)) {
-                double dx = b[0] + 0.5D - mx;
-                double dz = b[2] + 0.5D - mz;
-                double d = dx * dx + dz * dz;
-                if (d < bestD) {
-                    bestD = d;
-                    best = b;
+            double len = geo.length();
+            double sMax = Math.max(1.0D, len - 1.0D);
+            for (double s = 1.0D; s <= sMax + 1.0E-9D; s += 0.25D) {
+                int ry = (int) (posY + geo.height(s));
+                if (ry != blockY && ry != blockY + 1) {
+                    continue;
                 }
+                return new int[]{(int) Math.floor(posX + geo.x(s)), blockY, (int) Math.floor(posZ + geo.z(s))};
             }
-            return best == null ? fallback : new BlockPos(best[0], best[1], best[2]);
-        } catch (Throwable t) {
-            return fallback;
+        } catch (Throwable ignored) {
+            // 几何取不到就用原生位置
         }
+        return new int[]{blockX, blockY, blockZ};
     }
 
     /**

@@ -55,7 +55,7 @@ public final class PlanSegment {
         double maxDev = 0.0D;
         RailMapBasic rm;
         try {
-            rm = new RailMapBasic(this.start, this.end);
+            rm = com.tracktool.rail.RailMaps.basic(this.start, this.end);
         } catch (Throwable t) {
             this.degenerate = true;
             this.deviation = Double.MAX_VALUE;

@@ -131,8 +131,8 @@ def build(L, yaw_deg, start, n_pieces, half_width, mode, anchor_dir):
         if mode == 'equal':
             core = (p.rp0.bx, p.rp0.bz)                     # current: start RP block
         else:
-            mid = p.at(p.len / 2)                           # fix: list cell nearest to mid-length
-            core = min(lst, key=lambda c: (c[0] + .5 - mid[0]) ** 2 + (c[1] + .5 - mid[1]) ** 2)
+            x1, z1 = p.at(min(1.0, p.len / 2))           # fix: centreline column 1 m into the piece
+            core = (math.floor(x1), math.floor(z1))     #      (Y = start RP blockY, see ExactRailLayer.coreCell)
         for c in lst:                                       # setRail take-over (skips other cores)
             if c in cores and cores[c] != p.idx: continue
             owner[c] = p.idx

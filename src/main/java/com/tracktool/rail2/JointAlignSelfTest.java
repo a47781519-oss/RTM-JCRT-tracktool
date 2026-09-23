@@ -100,6 +100,66 @@ public final class JointAlignSelfTest {
         }
     }
 
+    /** 带坡度的直线（grade = 每米升高，负数为下坡）。 */
+    private static ExactRailGeometry slope(final double len, final double yawDeg, final double grade) {
+        final double dx = Math.sin(Math.toRadians(yawDeg));
+        final double dz = Math.cos(Math.toRadians(yawDeg));
+        return new ExactRailGeometry() {
+            public double length() { return len; }
+            public double x(double t) { return dx * t; }
+            public double z(double t) { return dz * t; }
+            public double height(double t) { return grade * t; }
+            public double yaw(double t) { return yawDeg; }
+            public double pitch(double t) { return Math.toDegrees(Math.atan(grade)); }
+            public double roll(double t) { return 0.0D; }
+        };
+    }
+
+    /** RailGrid.packY 的同款量化：y -> {blockY, height}，posY = blockY + (height+1)/16。 */
+    private static int[] packY(double y) {
+        int y16 = (int) Math.round(y * 16.0D);
+        int blockY = Math.floorDiv(y16 - 1, 16);
+        return new int[]{blockY, (y16 - 1) - blockY * 16};
+    }
+
+    private static int coreChecks;
+
+    /**
+     * 核心格：RTM 画钢轨时高度 = 设计高度 + (核心.y − 起点RP.blockY)，所以核心 Y 必须等于 blockY；
+     * 该列的轨道格必须在 blockY 或 blockY+1（核心替换它或在它正下方，绝不能浮在钢轨上）；
+     * 并且在本段一侧（离起点 ≥ 1 m 的中心线列）。
+     */
+    private static void checkCore(String name, ExactRailGeometry g, double px, double pz, double designY) {
+        int[] py = packY(designY);
+        double posY = py[0] + (py[1] + 1) * 0.0625D;
+        int bx = (int) Math.floor(px);
+        int bz = (int) Math.floor(pz);
+        int[] c = ExactRailLayer.coreCellAt(bx, py[0], bz, px, posY, pz, g);
+        coreChecks++;
+        String where = String.format("%s y=%.4f(blockY=%d)", name, designY, py[0]);
+        if (c[1] != py[0]) {
+            fail(where + " 核心 Y=" + c[1] + " ≠ blockY —— 钢轨会被画高/画低 " + (c[1] - py[0]) + " 格");
+            return;
+        }
+        boolean fallback = c[0] == bx && c[2] == bz;
+        if (fallback) {
+            return;                                  // 原生位置：渲染一定对（退路）
+        }
+        boolean found = false;
+        for (double s = 1.0D; s <= g.length() - 1.0D + 1e-9; s += 0.25D) {
+            if ((int) Math.floor(px + g.x(s)) == c[0] && (int) Math.floor(pz + g.z(s)) == c[2]) {
+                int ry = (int) (posY + g.height(s));
+                if (ry == c[1] || ry == c[1] + 1) {
+                    found = true;
+                    break;
+                }
+            }
+        }
+        if (!found) {
+            fail(where + " 核心列 (" + c[0] + "," + c[2] + ") 不在本段 1 m 之后的中心线上，或那一列轨道格不在 blockY/blockY+1");
+        }
+    }
+
     private static void fail(String msg) {
         failures++;
         if (failures <= 20) {
@@ -127,8 +187,21 @@ public final class JointAlignSelfTest {
                         100.0D, 50.5D, 20.0D);
             }
         }
+        // 核心格：平地（各种小数高度，含整数高度 —— RP 会存成下一格 + 15/16）、上下坡 ±10%、各方向
+        double[] heights = {73.0D, 73.03125D, 73.0625D, 73.5D, 73.9375D, 73.97D, 112.0D, 64.25D};
+        double[] grades = {0.0D, 0.01D, -0.01D, 0.04D, -0.04D, 0.10D, -0.10D};
+        for (double y0 : heights) {
+            for (double gr : grades) {
+                for (int yaw = 0; yaw < 360; yaw += 15) {
+                    checkCore(String.format("核心 坡度%.2f yaw=%d", gr, yaw), slope(19.0D, yaw, gr), 100.0D, 50.5D, y0);
+                    checkCore(String.format("核心(短段) 坡度%.2f yaw=%d", gr, yaw), slope(3.0D, yaw, gr), 100.0D, 50.5D, y0);
+                }
+            }
+        }
+
         System.out.println(failures == 0
-                ? "[jointTest] " + joints + " 个接头全部落在方块边上，两侧无共用列 —— 通过"
+                ? "[jointTest] " + joints + " 个接头全部落在方块边上，两侧无共用列；" + coreChecks
+                        + " 个核心格 Y 均等于起点 blockY、不浮在钢轨上 —— 通过"
                 : "[jointTest] " + failures + " 项失败（共 " + joints + " 个接头）");
         if (failures > 0) {
             System.exit(1);
