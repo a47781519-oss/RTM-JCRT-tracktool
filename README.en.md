@@ -227,6 +227,50 @@ A large cant lifts the outer edge a long way (more than one block at 20 degrees)
 
 ---
 
+## About the Chinese railway standard (GB 50090)
+
+This mod is developed with reference to **GB 50090**, the Chinese national standard *Code for Design of Railway Line*
+(GB 50090-2006, 「铁路线路设计规范」). It is **not a dependency** - RealTrainMod never validates any of it - but it is
+where the default values, the reference tables shown next to the parameter fields, and the safety limits come from.
+Every value can be overridden in the panel.
+
+### What is taken from it
+
+| Concept (Chinese term) | What the mod uses | Source in GB 50090 |
+|---|---|---|
+| **Easement (transition) length** 「缓和曲线长度」 | Preferred lengths by design speed and radius; a separate "minimum" table for general / difficult conditions | table 3.1.5-1 (preferred, 160/140/120 km/h) and table 3.1.5-2 (minimum, all speeds) |
+| **Minimum curve radius** 「最小曲线半径」 | Reference value per design speed | table 3.1.2 |
+| **Equilibrium superelevation** 「均衡超高」 | `h = 11.8 x V^2 / R` in mm, with `V` in km/h and `R` in metres; based on a 1500 mm rail-centreline distance, **capped at 150 mm** and quantised to 5 mm | derived from the standard's cant formula |
+| **Cant deficiency** 「欠超高」 | 70 mm general / 90 mm difficult, used when suggesting a cant value | standard clause on cant deficiency |
+| **Cant gradient** 「超高顺坡率」 | Preferred 1 per mille - this is why the ramp is placed inside the easement | standard clause on cant runoff |
+| **Vertical curves** 「竖曲线」 | `Rv = 15000 m` at 160 km/h once the grade break exceeds 1 per mille; `Rv = 10000 m` below 160 km/h above 3 per mille; length `L = Rv x |di| / 1000` | standard clause on vertical curves |
+| **Design speeds** 「设计速度」 | 160 / 140 / 120 / 100 / 80 km/h | the standard's speed series |
+
+The default design speed used for automatic easement lengths is **160 km/h**, which is the common figure for Chinese
+mainline passenger lines. Standard gauge is 1435 mm.
+
+### Why the mod still allows more cant than the standard
+
+GB 50090 caps superelevation at **150 mm** (about 5.7 degrees on a 1500 mm base). This mod will accept up to
+**10 degrees** (about 260 mm) because it is a game, not a railway: beyond roughly 10 degrees RTM tilts the ballast
+top so far that the bed turns into a slanted wall and the rails sink into it, so 10 degrees is a *rendering* limit
+rather than an engineering one. For anything meant to look like a real line, stay at or below the standard's 150 mm.
+
+### Glossary
+
+- **缓和曲线 / easement** - the spiral (clothoid) between straight and circular curve, where curvature changes linearly
+- **圆曲线 / circular curve** - constant curvature, the body of the curve
+- **超高 / cant** - raising the outer rail so that part of the centrifugal force is balanced by gravity
+- **超高顺坡 / cant gradient** - the rate at which that raising is introduced, spread over the easement
+- **竖曲线 / vertical curve** - the smooth transition where the gradient changes
+- **坡度 / grade** - the longitudinal slope, usually quoted in per mille
+- **轨距 / gauge** - distance between rail centrelines; 1435 mm is standard gauge
+- **设计速度 / design speed** - the speed the geometry is dimensioned for
+
+> In short: GB 50090 supplies **sensible railway defaults**. The geometry engine itself is speed-agnostic - it just
+> follows the numbers you give it.
+---
+
 ## License
 
 [MIT License](LICENSE).
