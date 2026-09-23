@@ -353,6 +353,111 @@ public final class TestHarness {
     }
 
     /**
+     * {@code /tracktool test audit [半径]} —— 只读体检：半径内（默认 200 格）每一颗轨道核心，
+     * 沿它的 RailMap 每 0.1 m 走一点，逐列检查「轨面层 ±1 内有没有轨道方块」。
+     *
+     * <p>这正是转向架的视角：{@code EntityBogie.resetRailObj} 取提议点所在那一列、从上往下找轨道方块，
+     * 找不到就 {@code FLY} —— 脱轨。所以这里报出来的每一个「空洞」都是列车会掉下去的地方，
+     * 同时也是路基画不出来的地方。</p>
+     *
+     * <p>聊天栏给汇总和前 8 个坐标（附带那一格现在是什么方块），完整清单写进服务器日志。
+     * 不改世界里的任何东西。</p>
+     */
+    public static void audit(EntityPlayerMP player, String[] args) {
+        int radius = 200;
+        if (args.length > 2) {
+            try {
+                radius = Math.max(16, Math.min(1000, Integer.parseInt(args[2])));
+            } catch (Throwable ignored) {
+            }
+        }
+        net.minecraft.world.World world = player.world;
+        double r2 = (double) radius * radius;
+        java.util.List<TileEntityLargeRailCore> cores = new java.util.ArrayList<TileEntityLargeRailCore>();
+        for (int i = 0; i < world.loadedTileEntityList.size(); i++) {
+            net.minecraft.tileentity.TileEntity te;
+            try {
+                te = world.loadedTileEntityList.get(i);
+            } catch (Throwable t) {
+                break;
+            }
+            if (te instanceof TileEntityLargeRailCore
+                    && te.getPos().distanceSq(player.posX, player.posY, player.posZ) <= r2) {
+                cores.add((TileEntityLargeRailCore) te);
+            }
+        }
+        int columns = 0;
+        int holes = 0;
+        int noMap = 0;
+        java.util.List<String> lines = new java.util.ArrayList<String>();
+        java.util.Set<Long> seenHole = new java.util.HashSet<Long>();
+        for (TileEntityLargeRailCore core : cores) {
+            jp.ngt.rtm.rail.util.RailMap[] maps;
+            try {
+                maps = core.getAllRailMaps();
+            } catch (Throwable t) {
+                maps = null;
+            }
+            if (maps == null || maps.length == 0) {
+                noMap++;
+                continue;
+            }
+            for (jp.ngt.rtm.rail.util.RailMap rm : maps) {
+                if (rm == null) {
+                    continue;
+                }
+                double len = rm.getLength();
+                int split = Math.max(2, (int) (len * 10.0D));
+                java.util.Set<Long> seen = new java.util.HashSet<Long>();
+                for (int i = 1; i < split; i++) {
+                    double[] zx = rm.getRailPos(split, i);
+                    int cx = (int) Math.floor(zx[1]);
+                    int cz = (int) Math.floor(zx[0]);
+                    long key = ((long) cx << 32) ^ (cz & 0xFFFFFFFFL);
+                    if (!seen.add(key)) {
+                        continue;
+                    }
+                    columns++;
+                    int cy = (int) rm.getRailHeight(split, i);
+                    boolean ok = false;
+                    for (int dy = -1; dy <= 1 && !ok; dy++) {
+                        BlockPos p = new BlockPos(cx, cy + dy, cz);
+                        ok = world.isBlockLoaded(p) && world.getBlockState(p).getBlock() instanceof BlockLargeRailBase;
+                        if (!world.isBlockLoaded(p)) {
+                            ok = true;                      // 区块没加载：不下结论
+                        }
+                    }
+                    if (ok) {
+                        continue;
+                    }
+                    if (!seenHole.add(new BlockPos(cx, cy, cz).toLong())) {
+                        continue;
+                    }
+                    holes++;
+                    BlockPos p = new BlockPos(cx, cy, cz);
+                    String what = String.valueOf(world.getBlockState(p).getBlock().getRegistryName());
+                    lines.add(String.format("(%d,%d,%d) 现在是 %s ｜ 所属核心 %s 第 %.1f m / 全长 %.1f m",
+                            cx, cy, cz, what, core.getPos(), len * i / split, len));
+                }
+            }
+        }
+        String head = String.format("[audit] 半径 %d 内 %d 颗核心、%d 列中心线：空洞 %d 列%s",
+                radius, cores.size(), columns, holes, noMap > 0 ? "（另有 " + noMap + " 颗核心取不到 RailMap）" : "");
+        player.sendMessage(new TextComponentString((holes == 0 ? TextFormatting.GREEN : TextFormatting.RED) + head));
+        com.tracktool.TrackToolCore.warn("%s", head);
+        for (int i = 0; i < lines.size(); i++) {
+            com.tracktool.TrackToolCore.warn("[audit] 空洞 %s", lines.get(i));
+            if (i < 8) {
+                player.sendMessage(new TextComponentString(TextFormatting.YELLOW + "  " + lines.get(i)));
+            }
+        }
+        if (lines.size() > 8) {
+            player.sendMessage(new TextComponentString(TextFormatting.GRAY + "  ……其余 " + (lines.size() - 8)
+                    + " 个见服务器日志"));
+        }
+    }
+
+    /**
      * {@code /tracktool test railcheck [采样数]} —— 用【和"放车"完全相同的那条查找链】验证轨道是否可用。
      *
      * <p>RTM 放车的判定（源码 item/ItemTrain.java:106）：

@@ -109,6 +109,8 @@ public class CommandTrackTool extends CommandBase {
                     TestHarness.selectAt(player, args);
                 } else if ("railcheck".equals(sub2)) {
                     TestHarness.railcheck(player, args);
+                } else if ("audit".equals(sub2)) {
+                    TestHarness.audit(player, args);
                 } else if ("cell".equals(sub2)) {
                     TestHarness.cell(player, args);
                 } else if ("joints".equals(sub2)) {
