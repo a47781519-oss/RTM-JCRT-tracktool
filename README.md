@@ -1,5 +1,7 @@
 # track-tool
 
+**语言 / Languages:** **中文** · [English](README.en.md) · [日本語](README.ja.md)
+
 **RealTrainMod (RTM) 的铺轨辅助模组** —— 用真正的铁路线形（缓和曲线 + 圆曲线 + 缓和曲线、外轨超高、竖曲线）在 Minecraft 里铺设轨道，而不是靠一段段手摆标记点。
 
 | | |
