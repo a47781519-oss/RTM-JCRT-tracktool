@@ -29,7 +29,7 @@ public final class TrackToolCore {
 
     public static final String MODID = "tracktool";
     public static final String NAME = "track-tool";
-    public static final String VERSION = "0.1.4";
+    public static final String VERSION = "0.1.6";
 
     @Mod.Instance(TrackToolCore.MODID)
     public static TrackToolCore instance;

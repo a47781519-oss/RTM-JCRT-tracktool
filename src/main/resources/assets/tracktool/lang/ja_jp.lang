@@ -1,0 +1,133 @@
+itemGroup.rtm_track=RTM 敷設
+item.tracktool:rail_staff.name=敷設杖
+
+tracktool.gui.title=敷設杖
+tracktool.mode.straight=直線
+tracktool.mode.curve=曲線
+tracktool.mode.connect=接続
+
+tracktool.info.selected=選択中の端点: %s
+tracktool.info.mode=モード: %s
+tracktool.info.length=総延長: %s m
+tracktool.info.segments=コア数: %d、最大偏差: %s m
+tracktool.info.no_plan=線形が未計算です — レール端を選択してください
+tracktool.info.placing=敷設中: %d / %d
+tracktool.info.working=処理中...
+
+tracktool.field.rise=上げ高 (m)
+tracktool.field.rise.tip=線形全体で指定メートルぶん高くします。縦曲線で滑らかに接続します。
+tracktool.field.verticalRadius=縦曲線半径 (m)
+tracktool.field.verticalRadius.tip=勾配変化に使う放物線縦曲線の半径です。
+tracktool.field.linesLeft=左側の平行線
+tracktool.field.linesLeft.tip=選択した線路の左側に追加する平行線の本数です。
+tracktool.field.linesRight=右側の平行線
+tracktool.field.linesRight.tip=選択した線路の右側に追加する平行線の本数です。
+tracktool.field.spacing=線間隔 (m)
+tracktool.field.spacing.tip=平行線どうしの中心間距離です。
+tracktool.field.railPack=レールパック
+tracktool.field.railPack.tip=生成する線路に使うレールモデルパック (ModelRail) です。
+tracktool.field.ballast=道床
+tracktool.field.ballast.tip=レールの下に置くブロックです。「air」を選ぶと道床なしで敷設します。
+tracktool.field.straightLength=直線長 (m)
+tracktool.field.straightLength.tip=敷設する直線の長さです。
+tracktool.field.radius=半径 (m)
+tracktool.field.radius.tip=円曲線の半径です。1 m 単位に丸められます。
+tracktool.field.angle=交角 (度)
+tracktool.field.angle.tip=曲線の総偏角です。
+tracktool.field.cant=カント (度)
+tracktool.field.cant.tip=外軌の高さ（軌道のロール角）です。
+tracktool.field.cantGradient=カント勾配 (‰)
+tracktool.field.cantGradient.tip=カントを与える割合で、緩和曲線長の算出に使います。
+tracktool.field.autoTransition=緩和曲線を自動
+tracktool.field.autoTransition.tip=半径に応じて GB50090 の参照表から緩和曲線長を取得します。
+tracktool.field.transition=緩和曲線 (m)
+tracktool.field.transition.tip=緩和曲線（イージメント）の長さです。「緩和曲線を自動」を切るとこの値を使います。
+tracktool.field.turn=方向
+tracktool.field.turn.tip=接線に対して左へ曲がるか右へ曲がるかです。
+tracktool.field.cantInvert=カントを反転
+tracktool.field.cantInvert.tip=外軌ではなく内軌を高くします。
+tracktool.field.connectAuto=自動解算
+tracktool.field.connectAuto.tip=接続に使える最大かつ最も均等な半径をソルバに選ばせます。
+tracktool.field.connectCantAdaptive=カントを自動調整
+tracktool.field.connectCantAdaptive.tip=下のカント値を無視し、接続する 2 本のレールのカントの間で線形にすり付けます。
+tracktool.field.connectTransition=緩和曲線 (m)
+tracktool.field.connectTransition.tip=接続の 2 箇所の継ぎ目で使う緩和曲線長です。
+
+tracktool.turn.left=左
+tracktool.turn.right=右
+tracktool.tip.default=既定
+tracktool.tip.rail=レールパック: %s
+tracktool.tip.ballast=道床: %s
+tracktool.tip.usage=レールを右クリックすると端点を選択できます。
+tracktool.ballast.air=air（道床なし）
+
+tracktool.action.back=選択を戻す
+tracktool.action.confirm=確定
+tracktool.action.undo=敷設を取消
+tracktool.action.cancel=キャンセル
+
+tracktool.ref.title=GB50090 参照表 (R / L)
+tracktool.ref.speed=設計速度 %d km/h
+tracktool.ref.legend=半径(m) / 緩和曲線長(m)
+
+tracktool.msg.no_permission=レールを敷設するには OP 権限が必要です。
+tracktool.msg.busy=別の生成処理が実行中です。
+tracktool.msg.no_rail=範囲内にレールがありません — レールに照準を合わせて右クリックしてください。
+tracktool.msg.too_far=そのレールは遠すぎます。
+tracktool.msg.middle=レールの端を選んでください。
+tracktool.msg.deselected=端点の選択を解除しました。
+tracktool.msg.selected_one=1 つ目の端点を選択しました。接続モードでは 2 つ目も選んでください。
+tracktool.msg.selected_two=両方の端点を選択しました。
+tracktool.msg.reset_newest=端点が 3 つ以上選ばれたため、最新の 1 つだけを残しました。
+tracktool.msg.cleared=選択を解除しました。
+tracktool.msg.back_done=直前の選択を取り消しました。
+tracktool.msg.need_end=先にレールの端を選択してください。
+tracktool.msg.need_two=接続モードには 2 つの端点が必要です。
+tracktool.msg.nothing_to_undo=取り消す操作がありません。
+tracktool.msg.undone=取り消しました（%s ブロックを復元）。
+tracktool.msg.queued=線路を生成しています...
+tracktool.msg.placed=敷設完了: %s 個のコア、%s ブロック。
+tracktool.msg.rollback=%s 個のコアで生成に失敗 — ロールバックしました。
+tracktool.msg.no_rail_pack=サーバーにレールモデルパックが見つかりません。
+tracktool.msg.two_ends_connect_only=端点が 2 つ選択されています: 接続モードを使ってください。
+
+tracktool.err.field=%s の値が不正です (%s)
+tracktool.err.empty=空
+tracktool.err.not_number=数値ではありません
+tracktool.err.clamped=範囲外のため丸めました
+tracktool.err.no_start=先にレールの端を選択してください。
+tracktool.err.need_two=接続モードには 2 つの端点が必要です。
+tracktool.err.two_ends_connect_only=端点が 2 つ選択されています: 接続モードを使ってください。
+tracktool.err.geometry=指定された線形は成立しません。
+tracktool.err.zero_radius=半径に 0 は指定できません。
+tracktool.err.zero_angle=交角に 0 は指定できません。
+tracktool.err.transition_too_long=この交角に対して緩和曲線が長すぎます。
+tracktool.err.too_short=線形が短すぎます。
+tracktool.err.too_close=2 つの端点が近すぎます。
+tracktool.err.too_many_segments=区間が多すぎます（上限 %s）。
+tracktool.err.connect_failed=接続に失敗しました。
+tracktool.err.lattice=内部エラー: アンカーがレール格子から外れています。
+tracktool.err.obstacle=障害物があります。クリエイティブにするか線路を空けてください。
+tracktool.err.place_failed=レールコアの設置に失敗しました。
+tracktool.err.y_too_low=レールが低すぎます (y <= 0)。RTM のレール網コードが扱えません。
+
+tracktool.cmd.mode_usage=/tracktool mode <straight|curve|connect>
+tracktool.cmd.param_usage=/tracktool param <キー> <値>
+tracktool.cmd.unknown_param=不明なパラメータ: %s
+tracktool.cmd.param_set=%s = %s
+
+key.categories.tracktool=track-tool
+key.tracktool.open=敷設杖の GUI を開く
+key.tracktool.cancel=レール選択をキャンセル
+tracktool.err.connect_radius=半径が大きすぎます: この 2 つの端点では最大 %s m です（小さくするか自動解算を有効にしてください）。
+tracktool.err.connect_parallel=端点が平行で %s m ずれています。1 本の曲線では接続できません（S 字が必要です）。
+tracktool.err.connect_facing=2 つの端点が逆向きです — 反対側の端を選んでください。
+tracktool.info.connect_solved=自動: 半径 %s m、緩和曲線 %s m
+tracktool.err.connect_s_failed=この 2 つの端点には S 字が必要ですが、余地が足りません。端点を離すか横方向のずれを小さくしてください。
+tracktool.info.connect_s=S 字: 半径 %s m、緩和曲線 %s m（解算済み・変更不可）
+tracktool.info.s_locked=S モードでは半径と緩和曲線長はソルバが決定します。変更できるのはカントのみです
+tracktool.err.segment_too_short=この区間は 1 つの RTM レールには短すぎます (%s m): 2 つの端点を離してください
+tracktool.msg.nothing_to_back=戻せる選択点がありません。敷設済みの線路を消すには「敷設を取消」を使ってください。
+tracktool.msg.undone_clean=取り消しました（%s ブロックを復元、残っていたレール台座 %s 個を除去）。
+tracktool.msg.preclear=敷設前に新しい線路の範囲を空けました: 孤立したレール台座 %s 個、他線路のブロック %s 個、新しい線形上にあった古い線路 %s 本を除去。「敷設を取消」で孤立分以外は戻ります。
+tracktool.msg.preclear_touched=注意: 新しい線路が既存の線路 %s 本（コア %s）を横切っています。重なった部分のレール台座を除去しました。不要な線路であればコアブロックを壊せば完全に削除できます。
